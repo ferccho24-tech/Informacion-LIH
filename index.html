@@ -87,6 +87,12 @@ input[type=number]{width:80px}
 .tabbar #tabPrint{flex:0 0 auto}
 @media (max-width:640px){.tabbar{flex-direction:column;align-items:stretch}}
 .print-head{display:none}
+/* Mientras se genera el PDF: sin controles (no dejan hueco) y con encabezado visible */
+.pdf-on .wrap > .fbox, .pdf-on .wrap > .chips, .pdf-on #emptyBox, .pdf-on .tabbar, .pdf-on .wrap > .foot, .pdf-on #err, .pdf-on .wrap .noprint, .pdf-on .howto summary{display:none!important}
+.pdf-on .wrap{padding-top:0!important}
+.pdf-on .print-head{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;border-bottom:2px solid var(--ink);padding-bottom:8px;margin-bottom:12px}
+.pdf-on .print-head h1{margin:0;font-size:1.4rem}
+.pdf-on .print-head p{margin:0;font-size:.8rem;text-align:right;line-height:1.3}
 .tab{border:0;background:none;padding:10px 14px;cursor:pointer;font-weight:600;color:var(--muted);border-bottom:3px solid transparent;white-space:nowrap;display:inline-flex;gap:6px;align-items:center}
 .tab:hover{color:var(--ink)}
 .tab[aria-selected="true"]{color:var(--accent);border-bottom-color:var(--accent)}
@@ -680,7 +686,7 @@ a.foto:hover{text-decoration:underline}
     <button class="tab" role="tab" data-v="alertas">Alertas y tendencias <span class="badge" id="alertBadge"></span></button>
     <button class="tab" role="tab" data-v="procesos">Procesos</button>
   </nav>
-  <button class="btn primary noprint" id="tabPrint" type="button" title="Imprime o guarda en PDF la pestaña que está viendo">Imprimir o guardar PDF</button>
+  <button class="btn primary noprint" id="tabPrint" type="button" title="Descarga en PDF la pestaña que está viendo">Descargar PDF</button>
   </div>
   <!-- Encabezado que solo aparece al imprimir -->
   <div class="print-head" id="printHead"></div>
@@ -694,7 +700,7 @@ a.foto:hover{text-decoration:underline}
           <h2 class="inf-title" id="infPeriodo">Servicios de recolección y entrega</h2>
           <p class="inf-lead" id="infLead"></p>
         </div>
-        <button class="btn primary noprint" id="infPrint" type="button">Imprimir o guardar PDF</button>
+        <button class="btn primary noprint" id="infPrint" type="button">Descargar PDF</button>
       </header>
 
       <div class="inf-cards" id="infCards"></div>
@@ -3212,17 +3218,71 @@ $('mppBuscar').addEventListener('input', () => {
 $('mppSel').addEventListener('change', e => { mppPunto = e.target.value; mppComparar(); mppMostrar(); });
 for (const id of ['mppDesde','mppHasta','mppCero']) $(id).addEventListener('change', () => { mppComparar(); mppMostrar(); });
 $('mppCsv').addEventListener('click', mppCsv);
-$('infPrint').addEventListener('click', () => { if (view !== 'informe') go('informe'); setTimeout(imprimirVista, 300); });
-// Imprimir o guardar PDF la pestaña abierta, con título, periodo, filtros y autor
-function imprimirVista(){
+$('infPrint').addEventListener('click', () => { if (view !== 'informe') go('informe'); setTimeout(descargarPdf, 300); });
+// Encabezado del PDF: pestaña, periodo, filtros, fecha y autor
+function llenarEncabezado(){
   const tab = document.querySelector(`.tab[data-v="${view}"]`);
   const nombre = tab ? tab.childNodes[0].textContent.trim() : '';
   const chips = $('chips').innerText.trim(), filtros = /^Sin filtros/i.test(chips) ? '' : 'Filtros: ' + chips.replace(/\s*✕\s*/g, ' · ').replace(/[\s·]+$/, '');
-  $('printHead').innerHTML = `<div><h1>Tablero de servicios LIH · ${esc(nombre)}</h1><p style="text-align:left">${F.desde || F.hasta ? `Periodo: ${fDia(F.desde) || 'inicio'} al ${fDia(F.hasta) || 'hoy'}` : 'Todo el periodo'}${filtros ? ' · ' + esc(filtros) : ''} · impreso el ${new Date().toLocaleDateString('es-CO')}</p></div>` +
+  $('printHead').innerHTML = `<div><h1>Tablero de servicios LIH · ${esc(nombre)}</h1><p style="text-align:left">${F.desde || F.hasta ? `Periodo: ${fDia(F.desde) || 'inicio'} al ${fDia(F.hasta) || 'hoy'}` : 'Todo el periodo'}${filtros ? ' · ' + esc(filtros) : ''} · generado el ${new Date().toLocaleDateString('es-CO')}</p></div>` +
     `<p>Diseño y desarrollo<br><b>Abel Fernando Ochoa Lozada</b><br>Líder de proyecto LIH · coordinador.lih@quick.com.co</p>`;
-  setTimeout(() => window.print(), 150);
+  return nombre;
 }
-$('tabPrint').addEventListener('click', imprimirVista);
+// Descarga directa del PDF de la pestaña abierta (sin la ventana de impresión). html2pdf se carga solo la primera vez.
+let html2pdfListo;
+function cargarHtml2pdf(){
+  return html2pdfListo ||= new Promise((ok, mal) => {
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
+    s.onload = ok; s.onerror = () => { html2pdfListo = null; mal(new Error('No se pudo cargar el generador de PDF')); };
+    document.head.appendChild(s);
+  });
+}
+async function descargarPdf(){
+  const btns = [$('tabPrint'), $('infPrint')], txt = btns.map(b => b.textContent);
+  btns.forEach(b => { b.disabled = true; b.textContent = 'Generando PDF…'; });
+  const nombre = llenarEncabezado();
+  // El PDF se arma siempre a ancho de escritorio (también desde el celular): las gráficas se redibujan a ese ancho
+  // ANCHO = ancho útil de una hoja A4 horizontal con márgenes de 8 mm (281 mm ≈ 1062 px), el mismo que usa html2pdf
+  const wrap = document.querySelector('.wrap'), ANCHO = 1062, anchoAntes = wrap.style.width;
+  document.body.classList.add('pdf-on');
+  wrap.style.width = ANCHO + 'px'; wrap.style.boxSizing = 'border-box'; wrap.style.margin = '0';
+  const redibujar = () => Object.values(charts).forEach(c => c && c.resize && c.resize());
+  // html2pdf copia todas las gráficas, también las de pestañas ocultas (miden 0 y rompen la copia): se les da 1 px mientras tanto
+  let ceros = [];
+  const scrollAntes = window.scrollY; window.scrollTo(0, 0);   // con la página desplazada la captura sale corrida
+  try {
+    await cargarHtml2pdf();
+    redibujar(); await new Promise(r => setTimeout(r, 400));
+    ceros = [...wrap.querySelectorAll('canvas')].filter(c => !c.width || !c.height);
+    ceros.forEach(c => { c.width = 1; c.height = 1; });
+    await new Promise(r => setTimeout(r, 100));
+    const hoy = new Date(), f = `${String(hoy.getDate()).padStart(2,'0')}-${String(hoy.getMonth()+1).padStart(2,'0')}-${hoy.getFullYear()}`;
+    await html2pdf().set({
+      margin: [8, 8, 10, 8],
+      filename: `Tablero_LIH_${sinTilde(nombre).replace(/[^a-z0-9]+/g,'_').replace(/^_|_$/g,'')}_${f}.pdf`,
+      image: {type: 'jpeg', quality: 0.95},
+      html2canvas: {scale: 2, useCORS: true, backgroundColor: css('--bg') || '#ffffff', windowWidth: ANCHO, scrollX: 0, scrollY: 0,
+        // en la copia, cada gráfica se estira al ancho de su recuadro
+        onclone: doc => { const st = doc.createElement('style'); st.textContent = '.chart canvas, .mini canvas{width:100%!important;height:100%!important}'; doc.head.appendChild(st); },
+        // fuera del PDF: controles, pestañas ocultas y gráficas sin tamaño (rompen la captura)
+        ignoreElements: el => (el.matches && el.matches('.fbox, .chips, #emptyBox, .tabbar, .foot, #err, .noprint, dialog, .howto summary, [hidden]')) || (el.tagName === 'CANVAS' && (!el.width || !el.height))},
+      jsPDF: {unit: 'mm', format: 'a4', orientation: 'landscape'},
+      pagebreak: {mode: ['css', 'legacy'], avoid: ['.panel', '.inf-sec', '.icard', '.kpi', '.howto', 'tr']}
+    }).from(wrap).save();
+  } catch (e) {
+    window.print();   // si no se puede generar el archivo, queda la impresión del navegador
+  } finally {
+    document.body.classList.remove('pdf-on');
+    ceros.forEach(c => { c.width = 0; c.height = 0; });
+    wrap.style.width = anchoAntes; wrap.style.boxSizing = ''; wrap.style.margin = ''; redibujar();
+    window.scrollTo(0, scrollAntes);
+    btns.forEach((b, i) => { b.disabled = false; b.textContent = txt[i]; });
+  }
+}
+$('tabPrint').addEventListener('click', descargarPdf);
+// Impresión con Ctrl+P: el encabezado también sale
+window.addEventListener('beforeprint', llenarEncabezado);
 // Las gráficas se ajustan al ancho de la hoja al imprimir y vuelven a su tamaño después
 window.addEventListener('beforeprint', () => Object.values(charts).forEach(c => c && c.resize && c.resize()));
 window.addEventListener('afterprint', () => Object.values(charts).forEach(c => c && c.resize && c.resize()));
