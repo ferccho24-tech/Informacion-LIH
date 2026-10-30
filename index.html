@@ -1785,7 +1785,9 @@ function loadAdicionalesDe(hoja){
           const c = row.c, m = c[0] && /Date\((\d+),(\d+),(\d+)/.exec(String(c[0].v));
           if (!m) return null;   // fila de total o vacía
           const dia = `${m[1]}-${String(+m[2]+1).padStart(2,'0')}-${String(+m[3]).padStart(2,'0')}`;
-          return {dia, lugar: val(c[1]).trim(), cliente: val(c[6]), obs: val(c[7]), hi: val(c[8]), hf: val(c[9]), valor: +val(c[10]).replace(/[^\d]/g,'') || 0};
+          // Otros cobros (línea distinta de ADICIONAL): el concepto está en Observaciones, no en la columna B
+          const linea = val(c[3]).trim(), obs = val(c[7]).trim();
+          return {dia, lugar: !/ADICIONAL/i.test(linea) && obs ? obs : val(c[1]).trim(), linea, cliente: val(c[6]), obs, hi: val(c[8]), hf: val(c[9]), valor: +val(c[10]).replace(/[^\d]/g,'') || 0};
         }).filter(Boolean);
       }
       done();
@@ -1817,16 +1819,22 @@ function pgMostrar(){
   $('pgFijoA').hidden = $('pgFijoB').hidden = !kf.length;
   $('pgAdA').hidden = $('pgAdB').hidden = !ad.length;
   $('pgVacio').textContent = [!kf.length && !VERSION_PUBLICA ? `No hay factura de pagos fijos cargada para ${nom}.` : '', !ad.length ? `No hay recolecciones adicionales de ${nom} en la pestaña Adicionales.` : ''].filter(Boolean).join(' ');
+  // Línea de servicio ADICIONAL = recolección; cualquier otra (p. ej. PERMISO) = otro cobro: suma al valor pero no como recolección
+  const rec = ad.filter(a => /ADICIONAL/i.test(a.linea)), otros = ad.filter(a => !/ADICIONAL/i.test(a.linea));
+  const recV = rec.reduce((s,a)=>s+a.valor,0), otrosV = otros.reduce((s,a)=>s+a.valor,0);
   const kAd = [
-    ['Recolecciones adicionales', fmtN(ad.length), `${new Set(ad.map(a=>a.dia)).size} días · pestaña Adicionales${sel === PG_TODOS && ad.length ? ' · ' + [...new Set(ad.map(a=>mesNombre(a.dia.slice(0,7))))].join(', ') : ''}`, 'amber'],
-    ['Valor adicionales', fmtCOP(adV), ad.length ? `promedio ${fmtCOP(adV/ad.length)} por recolección` : 'sin recolecciones adicionales']
+    ['Recolecciones adicionales', fmtN(rec.length), `${new Set(rec.map(a=>a.dia)).size} días · pestaña Adicionales${sel === PG_TODOS && rec.length ? ' · ' + [...new Set(rec.map(a=>mesNombre(a.dia.slice(0,7))))].join(', ') : ''}`, 'amber'],
+    ['Valor recolecciones', fmtCOP(recV), rec.length ? `promedio ${fmtCOP(recV/rec.length)} por recolección` : 'sin recolecciones adicionales'],
+    ['Otros cobros', fmtCOP(otrosV), otros.length ? [...new Set(otros.map(a=>titleCase(a.lugar)))].join(', ') : 'sin otros cobros'],
+    ['Total adicionales', fmtCOP(adV), 'recolecciones + otros cobros']
   ];
-  if (kf.length) pgFijo(kf, kAd, adV); else { kpis('pgK', [...kAd, ['Lugar con más adicionales', ad.length ? titleCase(sortedEntries(countBy(ad, a=>a.lugar))[0][0]) : '–', ad.length ? `${sortedEntries(countBy(ad, a=>a.lugar))[0][1]} recolecciones` : ''],
-    VERSION_PUBLICA ? ['Días con adicionales', fmtN(new Set(ad.map(a=>a.dia)).size), ad.length ? `${fmtD(ad.length / new Set(ad.map(a=>a.dia)).size)} recolecciones por día` : ''] : ['Pago fijo', '–', 'sin factura cargada']]); $('pgK').className = 'kpis'; }
-  if (ad.length) pgAdicionales(nom, ad, adV);
+  const lugares = sortedEntries(countBy(rec, a=>a.lugar));
+  const kLugar = ['Lugar con más adicionales', lugares.length ? titleCase(lugares[0][0]) : '–', lugares.length ? `${lugares[0][1]} recolecciones` : ''];
+  if (kf.length) pgFijo(kf, kAd, adV, kLugar); else { kpis('pgK', kAd); $('pgK').className = 'kpis'; }
+  if (ad.length) pgAdicionales(nom, ad, adV, rec.length, otros.length);
 }
 // Pagos fijos de una o varias facturas (varias = se suman por concepto)
-function pgFijo(kf, kAd, adV){
+function pgFijo(kf, kAd, adV, kLugar){
   const conc = new Map();
   for (const k of kf) for (const x of facturaDe(k).items) { const o = conc.get(x.con) || {cod:x.cod, con:x.con, cant:0, vt:0}; o.cant += x.cant; o.vt += x.cant*x.vu; conc.set(x.con, o); }
   const It = [...conc.values()].map((x,i) => ({n:i+1, ...x, vu: x.cant ? x.vt/x.cant : 0}));
@@ -1846,7 +1854,9 @@ function pgFijo(kf, kAd, adV){
     ['Retención en la fuente', fmtCOP(ret), fmtP(pct(ret, bruto)) + ' del valor bruto'],
     ['Total factura', fmtCOP(total), `pago fijo de ${facts} · ${facturaDe(kf[0]).pago}`],
     ['Mensajeros motorizados', fmtN(opN), `${OPERACION_MOTO.map(o=>`${o.n} de ${o.h} h`).join(' · ')} · ${fmtN(motoN)} facturados`, opN > motoN ? 'amber' : ''],
-    ['Pago por motorizados', fmtCOP(motoV), fmtP(pct(motoV, bruto)) + ' del valor bruto']
+    ['Pago por motorizados', fmtCOP(motoV), fmtP(pct(motoV, bruto)) + ' del valor bruto'],
+    ['Coordinación y plataformas', fmtCOP(bruto - motoV), fmtP(pct(bruto - motoV, bruto)) + ' del valor bruto'],
+    kLugar
   ]);
   $('pgK').className = 'kpis';
   const pal = palette();
@@ -1861,22 +1871,23 @@ function pgFijo(kf, kAd, adV){
   ], It, {def:{k:'n', dir:1}, foot:['', '', 'Valor bruto', fmtN(It.reduce((s,x)=>s+x.cant,0)), '', fmtCOP(bruto), '100 %']});
 }
 // Recolecciones adicionales del mes (Hoja 2): valor por día, por lugar y detalle
-function pgAdicionales(nom, ad, adV){
+function pgAdicionales(nom, ad, adV, nRec, nOtros){
   const byD = groupBy(ad, a=>a.dia), dias = [...byD.keys()].sort();
-  $('pgAdSub').textContent = `Valor a facturar de cada día · ${fmtN(ad.length)} recolecciones · ${fmtCOP(adV)} en ${nom}`;
+  const cuenta = `${fmtN(nRec)} recolecciones${nOtros ? ` + ${fmtN(nOtros)} ${nOtros === 1 ? 'otro cobro' : 'otros cobros'}` : ''}`;
+  $('pgAdSub').textContent = `Valor a facturar de cada día · ${cuenta} · ${fmtCOP(adV)} en ${nom}`;
   mk('chPgAdDia', {type:'bar', data:{labels:dias.map(d=>`${DOW[new Date(d+'T12:00').getDay()]} ${dLbl(d)}`), datasets:[
       {label:'Valor a facturar', data:dias.map(d=>byD.get(d).reduce((s,a)=>s+a.valor,0)), backgroundColor:css('--accent-2'), borderRadius:3, datalabels:{formatter:v=>fmtCOP(v)}}]},
-    options:{plugins:{legend:{display:false}, tooltip:Object.assign(tt(),{callbacks:{label:c=>` ${fmtCOP(c.raw)}`, afterLabel:c=>{ const x = byD.get(dias[c.dataIndex]); return `${x.length} recolección(es): ${[...new Set(x.map(a=>titleCase(a.lugar)))].join(', ')}`; }}})},
+    options:{plugins:{legend:{display:false}, tooltip:Object.assign(tt(),{callbacks:{label:c=>` ${fmtCOP(c.raw)}`, afterLabel:c=>{ const x = byD.get(dias[c.dataIndex]); return `${x.length} registro(s): ${[...new Set(x.map(a=>titleCase(a.lugar)))].join(', ')}`; }}})},
       scales:{x:{ticks:{color:css('--muted'), maxRotation:60}, grid:{display:false}}, y:{beginAtZero:true, ticks:{color:css('--muted'), callback:v=>fmtCOP(v)}, grid:{color:css('--line')}}}}});
   const porLugar = sortedEntries([...groupBy(ad, a=>a.lugar)].reduce((m,[l,as])=>m.set(titleCase(l), as.reduce((s,a)=>s+a.valor,0)), new Map()));
   $('pgAdRutaWrap').style.height = Math.max(220, porLugar.length*30 + 50) + 'px';
   barH('chPgAdRuta', porLugar, {label:'Valor a facturar', color:()=>css('--accent-2'), fmt:v=>fmtCOP(v)});
-  $('pgAdInfo').textContent = `Fuente: pestaña Adicionales de la base · ${fmtN(ad.length)} recolecciones adicionales · total ${fmtCOP(adV)}`;
+  $('pgAdInfo').textContent = `Fuente: pestaña Adicionales de la base · ${cuenta} · total ${fmtCOP(adV)}`;
   table('tPgAd', [
-    {k:'dia', l:'Fecha', h:r=>`${DOW[new Date(r.dia+'T12:00').getDay()]} ${fDia(r.dia)}`}, {k:'lugar', l:'Lugar', h:r=>esc(titleCase(r.lugar))},
-    {k:'obs', l:'Observaciones', wrap:1}, {k:'hi', l:'Hora', h:r=>`${esc(r.hi)}–${esc(r.hf)}`},
+    {k:'dia', l:'Fecha', h:r=>`${DOW[new Date(r.dia+'T12:00').getDay()]} ${fDia(r.dia)}`}, {k:'lugar', l:'Lugar o concepto', h:r=>esc(titleCase(r.lugar))},
+    {k:'obs', l:'Observaciones', wrap:1}, {k:'hi', l:'Hora', h:r=>r.hi ? `${esc(r.hi)}–${esc(r.hf)}` : '–'},
     {k:'valor', l:'Valor a facturar', r:1, h:r=>`<b>${fmtCOP(r.valor)}</b>`}
-  ], ad, {def:{k:'dia', dir:1}, foot:['Total', `${fmtN(ad.length)} recolecciones`, '', '', fmtCOP(adV)]});
+  ], ad, {def:{k:'dia', dir:1}, foot:['Total', cuenta, '', '', fmtCOP(adV)]});
 }
 // Per cápita por ruta (tubos), desde INICIO_PERCAPITA, solo las rutas fijas (sin Mensajero administrativo).
 // A = sin Chía (su titular está excluido del per cápita) · B = Chía completa, contando la ruta y no el mensajero.
@@ -2147,7 +2158,7 @@ function guias(){
       '<b>Recolecciones adicionales por lugar</b>: el valor a facturar de cada lugar donde se hizo una recolección adicional.',
       '<b>Cuadro de recolecciones adicionales</b>: fecha, lugar, observación, horario y valor de cada recolección adicional.'
     ] : [
-      '<b>Indicadores</b>: pago fijo, recolecciones adicionales y su valor, total del mes, retención, total de la factura, mensajeros motorizados y pago por motorizados.',
+      '<b>Indicadores</b>: pago fijo, recolecciones adicionales y su valor, otros cobros (como permisos), total de adicionales, total de pagos, retención, total de la factura, mensajeros motorizados, pago por motorizados, coordinación y plataformas, y el lugar con más adicionales.',
       '<b>Composición del pago fijo</b>: qué parte de la factura corresponde a cada concepto.',
       '<b>Pago fijo por concepto</b>: el valor total facturado por cada concepto.',
       '<b>Cuadro de la factura</b>: cada ítem facturado con su cantidad, valor unitario y valor total.',
