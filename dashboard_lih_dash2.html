@@ -87,6 +87,12 @@ input[type=number]{width:80px}
 .tabbar #tabPrint{flex:0 0 auto}
 @media (max-width:640px){.tabbar{flex-direction:column;align-items:stretch}}
 .print-head{display:none}
+/* Mientras se genera el PDF: sin controles (no dejan hueco) y con encabezado visible */
+.pdf-on .wrap > .fbox, .pdf-on .wrap > .chips, .pdf-on #emptyBox, .pdf-on .tabbar, .pdf-on .wrap > .foot, .pdf-on #err, .pdf-on .wrap .noprint, .pdf-on .howto summary{display:none!important}
+.pdf-on .wrap{padding-top:0!important}
+.pdf-on .print-head{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;border-bottom:2px solid var(--ink);padding-bottom:8px;margin-bottom:12px}
+.pdf-on .print-head h1{margin:0;font-size:1.4rem}
+.pdf-on .print-head p{margin:0;font-size:.8rem;text-align:right;line-height:1.3}
 .tab{border:0;background:none;padding:10px 14px;cursor:pointer;font-weight:600;color:var(--muted);border-bottom:3px solid transparent;white-space:nowrap;display:inline-flex;gap:6px;align-items:center}
 .tab:hover{color:var(--ink)}
 .tab[aria-selected="true"]{color:var(--accent);border-bottom-color:var(--accent)}
@@ -680,7 +686,7 @@ a.foto:hover{text-decoration:underline}
     <button class="tab" role="tab" data-v="alertas">Alertas y tendencias <span class="badge" id="alertBadge"></span></button>
     <button class="tab" role="tab" data-v="procesos">Procesos</button>
   </nav>
-  <button class="btn primary noprint" id="tabPrint" type="button" title="Imprime o guarda en PDF la pestaña que está viendo">Imprimir o guardar PDF</button>
+  <button class="btn primary noprint" id="tabPrint" type="button" title="Descarga en PDF la pestaña que está viendo">Descargar PDF</button>
   </div>
   <!-- Encabezado que solo aparece al imprimir -->
   <div class="print-head" id="printHead"></div>
@@ -694,7 +700,7 @@ a.foto:hover{text-decoration:underline}
           <h2 class="inf-title" id="infPeriodo">Servicios de recolección y entrega</h2>
           <p class="inf-lead" id="infLead"></p>
         </div>
-        <button class="btn primary noprint" id="infPrint" type="button">Imprimir o guardar PDF</button>
+        <button class="btn primary noprint" id="infPrint" type="button">Descargar PDF</button>
       </header>
 
       <div class="inf-cards" id="infCards"></div>
@@ -1779,7 +1785,9 @@ function loadAdicionalesDe(hoja){
           const c = row.c, m = c[0] && /Date\((\d+),(\d+),(\d+)/.exec(String(c[0].v));
           if (!m) return null;   // fila de total o vacía
           const dia = `${m[1]}-${String(+m[2]+1).padStart(2,'0')}-${String(+m[3]).padStart(2,'0')}`;
-          return {dia, lugar: val(c[1]).trim(), cliente: val(c[6]), obs: val(c[7]), hi: val(c[8]), hf: val(c[9]), valor: +val(c[10]).replace(/[^\d]/g,'') || 0};
+          // Otros cobros (línea distinta de ADICIONAL): el concepto está en Observaciones, no en la columna B
+          const linea = val(c[3]).trim(), obs = val(c[7]).trim();
+          return {dia, lugar: !/ADICIONAL/i.test(linea) && obs ? obs : val(c[1]).trim(), linea, cliente: val(c[6]), obs, hi: val(c[8]), hf: val(c[9]), valor: +val(c[10]).replace(/[^\d]/g,'') || 0};
         }).filter(Boolean);
       }
       done();
@@ -1811,16 +1819,22 @@ function pgMostrar(){
   $('pgFijoA').hidden = $('pgFijoB').hidden = !kf.length;
   $('pgAdA').hidden = $('pgAdB').hidden = !ad.length;
   $('pgVacio').textContent = [!kf.length && !VERSION_PUBLICA ? `No hay factura de pagos fijos cargada para ${nom}.` : '', !ad.length ? `No hay recolecciones adicionales de ${nom} en la pestaña Adicionales.` : ''].filter(Boolean).join(' ');
+  // Línea de servicio ADICIONAL = recolección; cualquier otra (p. ej. PERMISO) = otro cobro: suma al valor pero no como recolección
+  const rec = ad.filter(a => /ADICIONAL/i.test(a.linea)), otros = ad.filter(a => !/ADICIONAL/i.test(a.linea));
+  const recV = rec.reduce((s,a)=>s+a.valor,0), otrosV = otros.reduce((s,a)=>s+a.valor,0);
   const kAd = [
-    ['Recolecciones adicionales', fmtN(ad.length), `${new Set(ad.map(a=>a.dia)).size} días · pestaña Adicionales${sel === PG_TODOS && ad.length ? ' · ' + [...new Set(ad.map(a=>mesNombre(a.dia.slice(0,7))))].join(', ') : ''}`, 'amber'],
-    ['Valor adicionales', fmtCOP(adV), ad.length ? `promedio ${fmtCOP(adV/ad.length)} por recolección` : 'sin recolecciones adicionales']
+    ['Recolecciones adicionales', fmtN(rec.length), `${new Set(rec.map(a=>a.dia)).size} días · pestaña Adicionales${sel === PG_TODOS && rec.length ? ' · ' + [...new Set(rec.map(a=>mesNombre(a.dia.slice(0,7))))].join(', ') : ''}`, 'amber'],
+    ['Valor recolecciones', fmtCOP(recV), rec.length ? `promedio ${fmtCOP(recV/rec.length)} por recolección` : 'sin recolecciones adicionales'],
+    ['Otros cobros', fmtCOP(otrosV), otros.length ? [...new Set(otros.map(a=>titleCase(a.lugar)))].join(', ') : 'sin otros cobros'],
+    ['Total adicionales', fmtCOP(adV), 'recolecciones + otros cobros']
   ];
-  if (kf.length) pgFijo(kf, kAd, adV); else { kpis('pgK', [...kAd, ['Lugar con más adicionales', ad.length ? titleCase(sortedEntries(countBy(ad, a=>a.lugar))[0][0]) : '–', ad.length ? `${sortedEntries(countBy(ad, a=>a.lugar))[0][1]} recolecciones` : ''],
-    VERSION_PUBLICA ? ['Días con adicionales', fmtN(new Set(ad.map(a=>a.dia)).size), ad.length ? `${fmtD(ad.length / new Set(ad.map(a=>a.dia)).size)} recolecciones por día` : ''] : ['Pago fijo', '–', 'sin factura cargada']]); $('pgK').className = 'kpis'; }
-  if (ad.length) pgAdicionales(nom, ad, adV);
+  const lugares = sortedEntries(countBy(rec, a=>a.lugar));
+  const kLugar = ['Lugar con más adicionales', lugares.length ? titleCase(lugares[0][0]) : '–', lugares.length ? `${lugares[0][1]} recolecciones` : ''];
+  if (kf.length) pgFijo(kf, kAd, adV, kLugar); else { kpis('pgK', kAd); $('pgK').className = 'kpis'; }
+  if (ad.length) pgAdicionales(nom, ad, adV, rec.length, otros.length);
 }
 // Pagos fijos de una o varias facturas (varias = se suman por concepto)
-function pgFijo(kf, kAd, adV){
+function pgFijo(kf, kAd, adV, kLugar){
   const conc = new Map();
   for (const k of kf) for (const x of facturaDe(k).items) { const o = conc.get(x.con) || {cod:x.cod, con:x.con, cant:0, vt:0}; o.cant += x.cant; o.vt += x.cant*x.vu; conc.set(x.con, o); }
   const It = [...conc.values()].map((x,i) => ({n:i+1, ...x, vu: x.cant ? x.vt/x.cant : 0}));
@@ -1840,7 +1854,9 @@ function pgFijo(kf, kAd, adV){
     ['Retención en la fuente', fmtCOP(ret), fmtP(pct(ret, bruto)) + ' del valor bruto'],
     ['Total factura', fmtCOP(total), `pago fijo de ${facts} · ${facturaDe(kf[0]).pago}`],
     ['Mensajeros motorizados', fmtN(opN), `${OPERACION_MOTO.map(o=>`${o.n} de ${o.h} h`).join(' · ')} · ${fmtN(motoN)} facturados`, opN > motoN ? 'amber' : ''],
-    ['Pago por motorizados', fmtCOP(motoV), fmtP(pct(motoV, bruto)) + ' del valor bruto']
+    ['Pago por motorizados', fmtCOP(motoV), fmtP(pct(motoV, bruto)) + ' del valor bruto'],
+    ['Coordinación y plataformas', fmtCOP(bruto - motoV), fmtP(pct(bruto - motoV, bruto)) + ' del valor bruto'],
+    kLugar
   ]);
   $('pgK').className = 'kpis';
   const pal = palette();
@@ -1855,22 +1871,23 @@ function pgFijo(kf, kAd, adV){
   ], It, {def:{k:'n', dir:1}, foot:['', '', 'Valor bruto', fmtN(It.reduce((s,x)=>s+x.cant,0)), '', fmtCOP(bruto), '100 %']});
 }
 // Recolecciones adicionales del mes (Hoja 2): valor por día, por lugar y detalle
-function pgAdicionales(nom, ad, adV){
+function pgAdicionales(nom, ad, adV, nRec, nOtros){
   const byD = groupBy(ad, a=>a.dia), dias = [...byD.keys()].sort();
-  $('pgAdSub').textContent = `Valor a facturar de cada día · ${fmtN(ad.length)} recolecciones · ${fmtCOP(adV)} en ${nom}`;
+  const cuenta = `${fmtN(nRec)} recolecciones${nOtros ? ` + ${fmtN(nOtros)} ${nOtros === 1 ? 'otro cobro' : 'otros cobros'}` : ''}`;
+  $('pgAdSub').textContent = `Valor a facturar de cada día · ${cuenta} · ${fmtCOP(adV)} en ${nom}`;
   mk('chPgAdDia', {type:'bar', data:{labels:dias.map(d=>`${DOW[new Date(d+'T12:00').getDay()]} ${dLbl(d)}`), datasets:[
       {label:'Valor a facturar', data:dias.map(d=>byD.get(d).reduce((s,a)=>s+a.valor,0)), backgroundColor:css('--accent-2'), borderRadius:3, datalabels:{formatter:v=>fmtCOP(v)}}]},
-    options:{plugins:{legend:{display:false}, tooltip:Object.assign(tt(),{callbacks:{label:c=>` ${fmtCOP(c.raw)}`, afterLabel:c=>{ const x = byD.get(dias[c.dataIndex]); return `${x.length} recolección(es): ${[...new Set(x.map(a=>titleCase(a.lugar)))].join(', ')}`; }}})},
+    options:{plugins:{legend:{display:false}, tooltip:Object.assign(tt(),{callbacks:{label:c=>` ${fmtCOP(c.raw)}`, afterLabel:c=>{ const x = byD.get(dias[c.dataIndex]); return `${x.length} registro(s): ${[...new Set(x.map(a=>titleCase(a.lugar)))].join(', ')}`; }}})},
       scales:{x:{ticks:{color:css('--muted'), maxRotation:60}, grid:{display:false}}, y:{beginAtZero:true, ticks:{color:css('--muted'), callback:v=>fmtCOP(v)}, grid:{color:css('--line')}}}}});
   const porLugar = sortedEntries([...groupBy(ad, a=>a.lugar)].reduce((m,[l,as])=>m.set(titleCase(l), as.reduce((s,a)=>s+a.valor,0)), new Map()));
   $('pgAdRutaWrap').style.height = Math.max(220, porLugar.length*30 + 50) + 'px';
   barH('chPgAdRuta', porLugar, {label:'Valor a facturar', color:()=>css('--accent-2'), fmt:v=>fmtCOP(v)});
-  $('pgAdInfo').textContent = `Fuente: pestaña Adicionales de la base · ${fmtN(ad.length)} recolecciones adicionales · total ${fmtCOP(adV)}`;
+  $('pgAdInfo').textContent = `Fuente: pestaña Adicionales de la base · ${cuenta} · total ${fmtCOP(adV)}`;
   table('tPgAd', [
-    {k:'dia', l:'Fecha', h:r=>`${DOW[new Date(r.dia+'T12:00').getDay()]} ${fDia(r.dia)}`}, {k:'lugar', l:'Lugar', h:r=>esc(titleCase(r.lugar))},
-    {k:'obs', l:'Observaciones', wrap:1}, {k:'hi', l:'Hora', h:r=>`${esc(r.hi)}–${esc(r.hf)}`},
+    {k:'dia', l:'Fecha', h:r=>`${DOW[new Date(r.dia+'T12:00').getDay()]} ${fDia(r.dia)}`}, {k:'lugar', l:'Lugar o concepto', h:r=>esc(titleCase(r.lugar))},
+    {k:'obs', l:'Observaciones', wrap:1}, {k:'hi', l:'Hora', h:r=>r.hi ? `${esc(r.hi)}–${esc(r.hf)}` : '–'},
     {k:'valor', l:'Valor a facturar', r:1, h:r=>`<b>${fmtCOP(r.valor)}</b>`}
-  ], ad, {def:{k:'dia', dir:1}, foot:['Total', `${fmtN(ad.length)} recolecciones`, '', '', fmtCOP(adV)]});
+  ], ad, {def:{k:'dia', dir:1}, foot:['Total', cuenta, '', '', fmtCOP(adV)]});
 }
 // Per cápita por ruta (tubos), desde INICIO_PERCAPITA, solo las rutas fijas (sin Mensajero administrativo).
 // A = sin Chía (su titular está excluido del per cápita) · B = Chía completa, contando la ruta y no el mensajero.
@@ -2141,7 +2158,7 @@ function guias(){
       '<b>Recolecciones adicionales por lugar</b>: el valor a facturar de cada lugar donde se hizo una recolección adicional.',
       '<b>Cuadro de recolecciones adicionales</b>: fecha, lugar, observación, horario y valor de cada recolección adicional.'
     ] : [
-      '<b>Indicadores</b>: pago fijo, recolecciones adicionales y su valor, total del mes, retención, total de la factura, mensajeros motorizados y pago por motorizados.',
+      '<b>Indicadores</b>: pago fijo, recolecciones adicionales y su valor, otros cobros (como permisos), total de adicionales, total de pagos, retención, total de la factura, mensajeros motorizados, pago por motorizados, coordinación y plataformas, y el lugar con más adicionales.',
       '<b>Composición del pago fijo</b>: qué parte de la factura corresponde a cada concepto.',
       '<b>Pago fijo por concepto</b>: el valor total facturado por cada concepto.',
       '<b>Cuadro de la factura</b>: cada ítem facturado con su cantidad, valor unitario y valor total.',
@@ -3212,17 +3229,71 @@ $('mppBuscar').addEventListener('input', () => {
 $('mppSel').addEventListener('change', e => { mppPunto = e.target.value; mppComparar(); mppMostrar(); });
 for (const id of ['mppDesde','mppHasta','mppCero']) $(id).addEventListener('change', () => { mppComparar(); mppMostrar(); });
 $('mppCsv').addEventListener('click', mppCsv);
-$('infPrint').addEventListener('click', () => { if (view !== 'informe') go('informe'); setTimeout(imprimirVista, 300); });
-// Imprimir o guardar PDF la pestaña abierta, con título, periodo, filtros y autor
-function imprimirVista(){
+$('infPrint').addEventListener('click', () => { if (view !== 'informe') go('informe'); setTimeout(descargarPdf, 300); });
+// Encabezado del PDF: pestaña, periodo, filtros, fecha y autor
+function llenarEncabezado(){
   const tab = document.querySelector(`.tab[data-v="${view}"]`);
   const nombre = tab ? tab.childNodes[0].textContent.trim() : '';
   const chips = $('chips').innerText.trim(), filtros = /^Sin filtros/i.test(chips) ? '' : 'Filtros: ' + chips.replace(/\s*✕\s*/g, ' · ').replace(/[\s·]+$/, '');
-  $('printHead').innerHTML = `<div><h1>Tablero de servicios LIH · ${esc(nombre)}</h1><p style="text-align:left">${F.desde || F.hasta ? `Periodo: ${fDia(F.desde) || 'inicio'} al ${fDia(F.hasta) || 'hoy'}` : 'Todo el periodo'}${filtros ? ' · ' + esc(filtros) : ''} · impreso el ${new Date().toLocaleDateString('es-CO')}</p></div>` +
+  $('printHead').innerHTML = `<div><h1>Tablero de servicios LIH · ${esc(nombre)}</h1><p style="text-align:left">${F.desde || F.hasta ? `Periodo: ${fDia(F.desde) || 'inicio'} al ${fDia(F.hasta) || 'hoy'}` : 'Todo el periodo'}${filtros ? ' · ' + esc(filtros) : ''} · generado el ${new Date().toLocaleDateString('es-CO')}</p></div>` +
     `<p>Diseño y desarrollo<br><b>Abel Fernando Ochoa Lozada</b><br>Líder de proyecto LIH · coordinador.lih@quick.com.co</p>`;
-  setTimeout(() => window.print(), 150);
+  return nombre;
 }
-$('tabPrint').addEventListener('click', imprimirVista);
+// Descarga directa del PDF de la pestaña abierta (sin la ventana de impresión). html2pdf se carga solo la primera vez.
+let html2pdfListo;
+function cargarHtml2pdf(){
+  return html2pdfListo ||= new Promise((ok, mal) => {
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
+    s.onload = ok; s.onerror = () => { html2pdfListo = null; mal(new Error('No se pudo cargar el generador de PDF')); };
+    document.head.appendChild(s);
+  });
+}
+async function descargarPdf(){
+  const btns = [$('tabPrint'), $('infPrint')], txt = btns.map(b => b.textContent);
+  btns.forEach(b => { b.disabled = true; b.textContent = 'Generando PDF…'; });
+  const nombre = llenarEncabezado();
+  // El PDF se arma siempre a ancho de escritorio (también desde el celular): las gráficas se redibujan a ese ancho
+  // ANCHO = ancho útil de una hoja A4 horizontal con márgenes de 8 mm (281 mm ≈ 1062 px), el mismo que usa html2pdf
+  const wrap = document.querySelector('.wrap'), ANCHO = 1062, anchoAntes = wrap.style.width;
+  document.body.classList.add('pdf-on');
+  wrap.style.width = ANCHO + 'px'; wrap.style.boxSizing = 'border-box'; wrap.style.margin = '0';
+  const redibujar = () => Object.values(charts).forEach(c => c && c.resize && c.resize());
+  // html2pdf copia todas las gráficas, también las de pestañas ocultas (miden 0 y rompen la copia): se les da 1 px mientras tanto
+  let ceros = [];
+  const scrollAntes = window.scrollY; window.scrollTo(0, 0);   // con la página desplazada la captura sale corrida
+  try {
+    await cargarHtml2pdf();
+    redibujar(); await new Promise(r => setTimeout(r, 400));
+    ceros = [...wrap.querySelectorAll('canvas')].filter(c => !c.width || !c.height);
+    ceros.forEach(c => { c.width = 1; c.height = 1; });
+    await new Promise(r => setTimeout(r, 100));
+    const hoy = new Date(), f = `${String(hoy.getDate()).padStart(2,'0')}-${String(hoy.getMonth()+1).padStart(2,'0')}-${hoy.getFullYear()}`;
+    await html2pdf().set({
+      margin: [8, 8, 10, 8],
+      filename: `Tablero_LIH_${sinTilde(nombre).replace(/[^a-z0-9]+/g,'_').replace(/^_|_$/g,'')}_${f}.pdf`,
+      image: {type: 'jpeg', quality: 0.95},
+      html2canvas: {scale: 2, useCORS: true, backgroundColor: css('--bg') || '#ffffff', windowWidth: ANCHO, scrollX: 0, scrollY: 0,
+        // en la copia, cada gráfica se estira al ancho de su recuadro
+        onclone: doc => { const st = doc.createElement('style'); st.textContent = '.chart canvas, .mini canvas{width:100%!important;height:100%!important}'; doc.head.appendChild(st); },
+        // fuera del PDF: controles, pestañas ocultas y gráficas sin tamaño (rompen la captura)
+        ignoreElements: el => (el.matches && el.matches('.fbox, .chips, #emptyBox, .tabbar, .foot, #err, .noprint, dialog, .howto summary, [hidden]')) || (el.tagName === 'CANVAS' && (!el.width || !el.height))},
+      jsPDF: {unit: 'mm', format: 'a4', orientation: 'landscape'},
+      pagebreak: {mode: ['css', 'legacy'], avoid: ['.panel', '.inf-sec', '.icard', '.kpi', '.howto', 'tr']}
+    }).from(wrap).save();
+  } catch (e) {
+    window.print();   // si no se puede generar el archivo, queda la impresión del navegador
+  } finally {
+    document.body.classList.remove('pdf-on');
+    ceros.forEach(c => { c.width = 0; c.height = 0; });
+    wrap.style.width = anchoAntes; wrap.style.boxSizing = ''; wrap.style.margin = ''; redibujar();
+    window.scrollTo(0, scrollAntes);
+    btns.forEach((b, i) => { b.disabled = false; b.textContent = txt[i]; });
+  }
+}
+$('tabPrint').addEventListener('click', descargarPdf);
+// Impresión con Ctrl+P: el encabezado también sale
+window.addEventListener('beforeprint', llenarEncabezado);
 // Las gráficas se ajustan al ancho de la hoja al imprimir y vuelven a su tamaño después
 window.addEventListener('beforeprint', () => Object.values(charts).forEach(c => c && c.resize && c.resize()));
 window.addEventListener('afterprint', () => Object.values(charts).forEach(c => c && c.resize && c.resize()));
