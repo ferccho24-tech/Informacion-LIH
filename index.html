@@ -2088,7 +2088,7 @@ function guias(){
     ],
     rs: [
       '<b>Indicadores</b>: clientes, muestras recolectadas, muestras por recolección, visitas “No hay”, entregas y registros a revisar.',
-      '<b>Top 10 · puntos con menos muestras</b>: los 10 puntos que menos muestras entregaron y su calificación.',
+      '<b>Top 10 · puntos con menos muestras</b>: los 10 puntos que menos muestras entregaron (con al menos 1 muestra) y su calificación.',
       '<b>Top 5 · laboratorios que más muestras entregan</b>: los 5 laboratorios que más muestras entregaron en el periodo.',
       '<b>Resultado de la visita por cliente</b>: por cada cliente, cuántas visitas (o muestras) fueron recolección, entrega, “No hay”, etc.',
       '<b>Muestras recolectadas por día · punto de colección</b>: cuántas muestras entregó el punto elegido en cada día.',
@@ -2566,7 +2566,7 @@ function rTop10(){
     return {c, tipo:rs[0].tipoCli, ruta:rs[0].rutaHab || rs[0].ruta, vis:rs.length, tot, muV:tot/rs.length, dias,
       diasCon:new Set(rs.filter(r=>r.muestras>0).map(r=>r.dia)).size, sinP:pct(sin, rs.length),
       no:rs.filter(r=>r.noEntrega).length, causa:(sortedEntries(countBy(rs.filter(r=>r.muestras===0), r=>r.tipo))[0]||['–'])[0]};
-  }).filter(p=>p.vis>=minV);
+  }).filter(p=>p.vis>=minV && p.tot>=1);   // solo puntos que entregaron al menos 1 muestra (coordinación, 03/11/2026)
   // Top 5 · laboratorios que más muestras entregan: mismos puntos, periodo, mínimo de visitas y excluidos que el Top 10
   const top5 = pts.slice().sort((a,b)=>b.tot-a.tot || a.c.localeCompare(b.c,'es')).slice(0,5);
   $('t5Info').textContent = top5.length ? `De mayor a menor · mismos filtros, mínimo de visitas (${minV}) y puntos excluidos que el Top 10 · clic en un laboratorio para ver sus muestras por día` : 'No hay laboratorios con muestras en el periodo elegido';
@@ -2581,7 +2581,7 @@ function rTop10(){
     const r = avgAll ? p.muV/avgAll : 0;
     p.cal = r === 0 ? ['Sin entregas','urg'] : r < .25 ? ['Muy bajo','urg'] : r < .5 ? ['Bajo','adi'] : r < 1 ? ['Medio','media'] : ['Normal','ok']; });
   $('t10Info').textContent = (V.length
-      ? `De menor a mayor · ${pts.length} puntos con al menos ${minV} ${minV === 1 ? 'visita' : 'visitas'} ${periodo}` +
+      ? `De menor a mayor · ${pts.length} puntos con al menos 1 muestra entregada y ${minV} ${minV === 1 ? 'visita' : 'visitas'} ${periodo}` +
         (ajustado ? ` · el mínimo se ajustó de ${minPedido} a ${minV} porque el periodo elegido tiene solo ${diasV.length} ${diasV.length === 1 ? 'día' : 'días'}` : '') +
         ` · promedio general ${fmtD(avgAll)} muestras por visita`
       : 'No hay puntos con muestras registradas en el periodo elegido') +
