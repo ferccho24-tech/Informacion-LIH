@@ -384,6 +384,7 @@ a.foto:hover{text-decoration:underline}
     </div>
     <div class="live">
       <span id="status" class="pill load"><span class="dot"></span><span id="statusTxt">Cargando datos…</span></span>
+      <span class="pill" id="datosHasta" hidden title="La base se carga por quincenas: los días siguientes aparecen cuando se suba el próximo cargue"></span>
       <span class="meta" id="lastUpd"></span>
       <label class="meta" for="every">Actualizar cada
         <select id="every">
@@ -885,9 +886,13 @@ a.foto:hover{text-decoration:underline}
     <div class="note"><b>Visita sin entrega</b> = visita con resultado <b>“No hay”</b> en la columna R (Observación - Finalizado): el conductor llegó y el punto no tenía muestras para entregar.</div>
     <div class="kpis" id="kNo"></div>
     <div class="grid">
-      <section class="panel span-12">
-        <header><h2>Puntos con más visitas sin entrega</h2><p>Clic para filtrar</p></header>
+      <section class="panel span-6">
+        <header><h2>Puntos con más visitas sin entrega</h2><p id="noCliSub">Cantidad de visitas “No hay” y pérdida estimada del periodo filtrado</p></header>
         <div class="chart h-320"><canvas id="chNoCli"></canvas></div>
+      </section>
+      <section class="panel span-6">
+        <header><h2>Pérdida estimada por cliente</h2><p id="noPerdSub">Costo de las visitas sin entrega</p></header>
+        <div class="chart h-320"><canvas id="chNoPerd"></canvas></div>
       </section>
       <section class="panel span-6">
         <header><h2>Por día de la semana</h2><p>% de visitas sin entrega</p></header>
@@ -906,6 +911,7 @@ a.foto:hover{text-decoration:underline}
             <select id="noRankBy">
               <option value="no">Cantidad de visitas sin entrega</option>
               <option value="noP">% de visitas sin entrega</option>
+              <option value="perd">Pérdida estimada ($)</option>
             </select>
           </label>
           <label class="meta" for="noRankDir">Orden
@@ -1270,8 +1276,8 @@ async function load(){
   for (const src of [fetchJsonp, ...SOURCES.map(u => () => fetchCsv(u))]){
     try{
       const raw = await src();
-      // La operación es de lunes a sábado: los registros con fecha de servicio en domingo no se tienen en cuenta
-      const rows = enrich(raw.map(normRow).filter(r => r.fecha && r.fecha.getDay() !== 0));
+      // Se incluyen todos los días con servicio, también domingos y festivos (rutas "DOMINGO" y "LUNES FESTIVO") (coordinación, 17/11/2026)
+      const rows = enrich(raw.map(normRow).filter(r => r.fecha));
       if(!rows.length) throw new Error('La hoja no tiene filas con fecha de servicio');
       const prev = ALL.length + PROC.length;
       // PROCESOS se separa de todas las estadísticas y tiene su propia pestaña
@@ -1282,6 +1288,10 @@ async function load(){
       fillSelects();
       const days = [...new Set(ALL.map(r=>r.dia))].sort();
       $('fDesde').min = $('fHasta').min = days[0]; $('fDesde').max = $('fHasta').max = days[days.length-1];
+      // Aviso: la base se carga por quincenas, así que se muestra hasta qué día hay información
+      const ultimoDia = [...new Set(rows.map(r=>r.dia))].sort().pop();
+      $('datosHasta').hidden = !ultimoDia;
+      $('datosHasta').innerHTML = ultimoDia ? `📅 Datos cargados hasta el <b>${fDia(ultimoDia)}</b>` : '';
       apply();
       loadAdicionales().then(() => { if ($('pg').open) pgMostrar(); });   // pestaña Adicionales: recolecciones adicionales
       const diff = prev ? ALL.length + PROC.length - prev : 0;
@@ -1712,7 +1722,7 @@ function cmMostrar(){
   const visDia = new Map(); for (const r of R) { const k = r.conductor+'|'+r.dia; visDia.set(k, (visDia.get(k)||0) + 1); }
   const Ru = new Map();
   for (const r of R) {
-    if (r.ruta === RUTA_ADMIN || r.ruta === RUTA_CHIA) continue;
+    if (r.ruta === RUTA_ADMIN || r.ruta === RUTA_CHIA || esRutaEspecial(r.ruta)) continue;
     const s = SAL.get(sinTilde(r.conductor)); if (!s) continue;
     const o = Ru.get(r.ruta) || {ru:r.ruta, costo:0, t:0, d:new Set(), mens:new Set()};
     o.costo += s.v / DIAS_MES / visDia.get(r.conductor+'|'+r.dia); o.t += r.muestras; o.d.add(r.dia); o.mens.add(r.conductor);
@@ -1892,9 +1902,11 @@ function pgAdicionales(nom, ad, adV, nRec, nOtros){
 // Per cápita por ruta (tubos), desde INICIO_PERCAPITA, solo las rutas fijas (sin Mensajero administrativo).
 // A = sin Chía (su titular está excluido del per cápita) · B = Chía completa, contando la ruta y no el mensajero.
 const RUTA_ADMIN = 'MENSAJERO ADMINISTRATIVO', RUTA_CHIA = 'CHIA';
+// Rutas de domingo y festivo: cuentan en todo el tablero, pero no son rutas fijas (no entran al per cápita ni al costo por tubo por ruta)
+const esRutaEspecial = ru => /^(DOMINGO|.*FESTIVO)$/i.test(String(ru).trim());
 function mrPerRuta(R){
   const conChia = $('mrChia').value === 'con';
-  const B = R.filter(r => r.dia >= INICIO_PERCAPITA && r.ruta !== RUTA_ADMIN && (conChia ? (r.ruta === RUTA_CHIA || !excluidoPc(r.conductor)) : (r.ruta !== RUTA_CHIA && !excluidoPc(r.conductor))));
+  const B = R.filter(r => r.dia >= INICIO_PERCAPITA && r.ruta !== RUTA_ADMIN && !esRutaEspecial(r.ruta) && (conChia ? (r.ruta === RUTA_CHIA || !excluidoPc(r.conductor)) : (r.ruta !== RUTA_CHIA && !excluidoPc(r.conductor))));
   const tot = B.reduce((s,r)=>s+r.muestras,0);
   const Rt = [...groupBy(B, r=>r.ruta)].map(([ru, rs]) => { const t = rs.reduce((s,r)=>s+r.muestras,0), d = new Set(rs.map(r=>r.dia)).size; return {ru, tit: TITULARES.get(ru) || '–', t, d, pd: d ? t/d : 0, pTot: pct(t, tot)}; }).sort((a,b)=>b.t-a.t);
   const pc = Rt.length ? tot/Rt.length : 0;
@@ -2072,7 +2084,7 @@ function guias(){
       ['<b>Alertas principales</b>: las situaciones más importantes que requieren atención.', 't'],
       ['<b>Último día frente al promedio</b>: cómo le fue al último día comparado con el promedio de los días anteriores.', 't'],
       '<b>Resultado del servicio</b>: qué porcentaje de las visitas fue recolección, entrega, “No hay”, documentación, urgencia, insumos o devolución.',
-      '<b>Día de la semana</b>: cuántos servicios se atienden en promedio cada día, de lunes a sábado.',
+      '<b>Día de la semana</b>: cuántos servicios se atienden en promedio cada día de la semana, domingos incluidos.',
       '<b>Servicios por ruta</b>: cuántos servicios atendió cada una de las 11 rutas.',
       ['<b>Desempeño por conductor</b>: servicios, días, rutas, tiempos, % a tiempo, visitas sin entrega, urgencias y muestras de cada mensajero.', 't'],
       '<b>Hora de llegada al cliente</b>: en qué horas del día se llega a los puntos.',
@@ -2110,8 +2122,9 @@ function guias(){
       ['<b>Listado de urgencias</b>: fecha, hora, cliente, ruta, conductor, tiempo de llegada y resultado de cada urgencia.', 't']
     ],
     noentrega: [
-      '<b>Indicadores</b>: visitas sin entrega (resultado “No hay”), puntos afectados, puntos críticos y promedio por día.',
+      '<b>Indicadores</b>: visitas sin entrega (resultado “No hay”), puntos afectados, puntos críticos, promedio por día, pérdida estimada y cliente con mayor pérdida.',
       '<b>Puntos con más visitas sin entrega</b>: los 15 puntos donde más veces no hubo muestras para entregar.',
+      '<b>Pérdida estimada por cliente</b>: lo que le costó al laboratorio ir a un punto y no recibir muestras. Cada visita vale el costo del día del mensajero (valor mensual ÷ 26) dividido entre las visitas que hizo ese día; se suma por cliente. Se mide en el rango de fechas del filtro y no incluye visitas de mensajeros sin valor registrado.',
       '<b>Por día de la semana</b>: qué día de la semana tiene más visitas sin entrega.',
       '<b>Tendencia diaria</b>: el % de visitas sin entrega de cada día y su promedio de los últimos 7 días.',
       ['<b>Ranking · clientes que no realizan entregas</b>: los puntos ordenados por cantidad o % de visitas sin entrega.', 't']
@@ -2954,13 +2967,48 @@ function rNo(){
   const R = FILT, N = R.filter(r=>r.noEntrega), n = R.length;
   const P = puntoRows(R).filter(p=>p.no>0);
   const crit = P.filter(p=>p.noP>=50 && p.n>=5);
+  // Pérdida estimada: una visita sin entrega le cuesta al laboratorio lo que vale esa visita del mensajero ese día
+  // (valor mensual ÷ 26 días ÷ visitas que hizo ese día), el mismo reparto de "Costo por tubo por ruta".
+  // Se mide en el rango de fechas del filtro, sin los mensajeros excluidos o sin valor registrado.
+  const visDiaAll = new Map(); for (const r of ALL) { const k = r.conductor+'|'+r.dia; visDiaAll.set(k, (visDiaAll.get(k)||0) + 1); }
+  const costoVisita = r => { if (excluidoPc(r.conductor)) return null;
+    const sal = SAL.get(sinTilde(r.conductor)); return sal ? sal.v / DIAS_MES / visDiaAll.get(r.conductor+'|'+r.dia) : null; };
+  const perdCli = new Map(), perdN = new Map(); let perdTot = 0, perdVis = 0;
+  for (const r of N) { const c = costoVisita(r); if (c == null) continue;
+    perdTot += c; perdVis++; perdCli.set(r.cliente, (perdCli.get(r.cliente)||0) + c); perdN.set(r.cliente, (perdN.get(r.cliente)||0) + 1); }
+  const perdTop = [...perdCli].sort((a,b)=>b[1]-a[1]);
+  const hayValores = SAL.size > 0;
+  const perdDias = opDays.length;
+  // Rango de la pérdida = exactamente las fechas del filtro (cantidad y valor salen de las mismas visitas)
+  const pdIni = F.desde || opDays[0], pdFin = F.hasta || opDays[opDays.length-1];
+  const rangoPerd = pdIni ? (pdIni === pdFin ? `del ${fDia(pdIni)}` : `del ${fDia(pdIni)} al ${fDia(pdFin)}`) : '';
+  const notaOct = '';
+  $('noCliSub').textContent = `Cantidad de visitas “No hay” · pérdida estimada ${rangoPerd}${notaOct}`;
   kpis('kNo', [
     ['Visitas sin entrega', fmtN(N.length), fmtP(pct(N.length,n))+' de las visitas · resultado “No hay” (columna R)', pct(N.length,n)>20?'bad':''],
     ['Puntos afectados', fmtN(P.length), `de ${fmtN(new Set(R.map(r=>r.cliente)).size)} puntos atendidos`],
     ['Puntos críticos', fmtN(crit.length), '≥ 50 % de visitas sin entrega (mín. 5 visitas)', crit.length?'bad':''],
-    ['Visitas sin entrega por día', fmtD(opDays.length ? N.length/opDays.length : null), `promedio en ${opDays.length} días de operación`]
+    ['Visitas sin entrega por día', fmtD(opDays.length ? N.length/opDays.length : null), `promedio en ${opDays.length} días de operación`],
+    ['Pérdida estimada', hayValores ? fmtCOP(perdTot) : '–', hayValores ? `${fmtCOP(perdVis ? perdTot/perdVis : null)} por visita · ${fmtN(perdVis)} de ${fmtN(N.length)} visitas valoradas · ${rangoPerd}` : 'sin valores de mensajeros en esta versión', perdTot ? 'bad' : ''],
+    ['Pérdida por visita', hayValores && perdVis ? fmtCOP(perdTot/perdVis) : '–', hayValores && perdVis ? 'promedio de lo que cuesta cada visita en la que el punto no entrega muestras' : 'sin valores de mensajeros en esta versión', perdVis ? 'bad' : ''],
+    ['Pérdida por día', hayValores && perdDias ? fmtCOP(perdTot/perdDias) : '–', hayValores && perdDias ? `promedio en ${perdDias} días de operación ${rangoPerd}` : '', perdDias ? 'amber' : ''],
+    ['Mayor pérdida por cliente', perdTop.length ? perdTop[0][0] : '–', perdTop.length ? `${fmtCOP(perdTop[0][1])} · ${fmtN(perdN.get(perdTop[0][0]))} visitas sin entrega` : '', perdTop.length ? 'amber' : '']
   ]);
-  barH('chNoCli', sortedEntries(countBy(N, r=>r.cliente)).slice(0,15), {label:'Visitas sin entrega', color:css('--c3'), onPick:v=>setF('cliente',v)});
+  // Puntos con más visitas sin entrega: cada barra muestra la cantidad y lo que pierde el laboratorio en ese punto
+  const nTop = sortedEntries(countBy(N, r=>r.cliente)).slice(0,15);
+  mk('chNoCli', {type:'bar', data:{labels:nTop.map(e=>e[0]), datasets:[{label:'Visitas sin entrega', data:nTop.map(e=>e[1]), backgroundColor:css('--c3'), borderRadius:3,
+      datalabels:{formatter:(v,c)=>{ const p = perdCli.get(nTop[c.dataIndex][0]); return p ? `${fmtN(v)} · ${fmtCOP(p)}` : fmtN(v); }}}]},
+    options:{indexAxis:'y', layout:{padding:{right:120}},
+      onClick:(e,el)=>{ if(el.length) setF('cliente', nTop[el[0].index][0]); },
+      plugins:{legend:{display:false}, tooltip:Object.assign(tt(),{callbacks:{label:c=>` ${fmtN(c.parsed.x)} visitas sin entrega`, afterLabel:c=>{ const k = nTop[c.dataIndex][0], p = perdCli.get(k), v = perdN.get(k); return p ? `Pérdida estimada ${fmtCOP(p)} · ${fmtCOP(p/v)} por visita` : 'Sin valor de mensajero (antes de octubre o mensajero sin valor)'; }}})},
+      scales:{x:{beginAtZero:true, ticks:{color:css('--muted')}, grid:{color:css('--line')}}, y:{ticks:{color:css('--muted'), autoSkip:false}, grid:{display:false}}}}});
+  $('noPerdSub').textContent = hayValores ? `Costo del mensajero en las visitas “No hay” · ${rangoPerd}${notaOct}` : 'Sin valores de mensajeros en esta versión';
+  const pT = perdTop.slice(0,15);
+  mk('chNoPerd', {type:'bar', data:{labels:pT.map(e=>e[0]), datasets:[{label:'Pérdida estimada', data:pT.map(e=>Math.round(e[1])), backgroundColor:css('--c4'), borderRadius:3, datalabels:{formatter:v=>fmtCOP(v)}}]},
+    options:{indexAxis:'y', layout:{padding:{right:84}},
+      onClick:(e,el)=>{ if(el.length) setF('cliente', pT[el[0].index][0]); },
+      plugins:{legend:{display:false}, tooltip:Object.assign(tt(),{callbacks:{label:c=>' '+fmtCOP(c.parsed.x), afterLabel:c=>{ const k = pT[c.dataIndex][0], v = perdN.get(k); return `${fmtN(v)} visitas sin entrega · ${fmtCOP(pT[c.dataIndex][1]/v)} por visita`; }}})},
+      scales:{x:{beginAtZero:true, ticks:{color:css('--muted'), callback:v=>fmtCOP(v)}, grid:{color:css('--line')}}, y:{ticks:{color:css('--muted'), autoSkip:false}, grid:{display:false}}}}});
   const tot = countBy(R, r=>r.fecha.getDay()), nd = countBy(N, r=>r.fecha.getDay());
   const dl = DOW_ORDER.filter(d=>tot.get(d));
   mk('chNoDow', {type:'bar', data:{labels:dl.map(d=>DOW[d]), datasets:[{label:'% sin entrega', data:dl.map(d=>+(pct(nd.get(d)||0, tot.get(d))).toFixed(1)), backgroundColor:css('--c3'), borderRadius:3}]},
@@ -3000,7 +3048,7 @@ function rNo(){
   const nByCli = groupBy(N, r=>r.cliente);
   const rows = P.map(p => { const rs = nByCli.get(p.c) || [];
     const dw = sortedEntries(countBy(rs, r=>r.fecha.getDay()));
-    return Object.assign({}, p, {dow: dw.length ? DOW[dw[0][0]] : '–', ultNo: rs.reduce((m,r)=>r.fecha>m?r.fecha:m, rs[0].fecha)}); });
+    return Object.assign({}, p, {dow: dw.length ? DOW[dw[0][0]] : '–', ultNo: rs.reduce((m,r)=>r.fecha>m?r.fecha:m, rs[0].fecha), perd: perdCli.get(p.c) || 0, perdV: perdN.get(p.c) ? perdCli.get(p.c)/perdN.get(p.c) : null}); });
   // Ranking: puesto 1 = primero según el orden elegido (por defecto de menor a mayor). Empates comparten puesto.
   const by = $('noRankBy').value, dir = +$('noRankDir').value, other = by === 'no' ? 'noP' : 'no';
   // En el ranking por %, los puntos con muy pocas visitas (ej. 1 de 1 = 100 %) se excluyen para no distorsionar
@@ -3012,16 +3060,20 @@ function rNo(){
   const maxV = Math.max(1, ...rows.map(r=>r[by]));
   const q = $('qNo').value.trim().toLowerCase();
   const shown = q ? rows.filter(r=>r.c.toLowerCase().includes(q)) : rows;
-  $('noRankInfo').textContent = `${fmtN(rows.length)} puntos · ranking por ${by==='no'?'cantidad':'%'} de visitas sin entrega, ${dir>0?'de menor a mayor':'de mayor a menor'}${by==='noP'?` (mín. ${minV} visitas)`:''} · clic para filtrar`;
-  const fmtBy = v => by === 'no' ? fmtN(v) : fmtP(v);
+  $('noRankInfo').textContent = `${fmtN(rows.length)} puntos · ranking por ${by==='no'?'cantidad de visitas sin entrega':by==='perd'?'pérdida estimada':'% de visitas sin entrega'}, ${dir>0?'de menor a mayor':'de mayor a menor'}${by==='noP'?` (mín. ${minV} visitas)`:''} · clic para filtrar`;
+  const fmtBy = v => by === 'no' ? fmtN(v) : by === 'perd' ? fmtCOP(v) : fmtP(v);
+  const lblOf = k => k === 'no' ? 'Sin entrega' : k === 'perd' ? 'Pérdida estimada' : '% sin entrega';
+  const sNo = rows.reduce((s,r)=>s+r.no,0), sN = rows.reduce((s,r)=>s+r.n,0), sP = rows.reduce((s,r)=>s+r.perd,0);
+  const totOf = k => k === 'no' ? fmtN(sNo) : k === 'perd' ? fmtCOP(sP) : fmtP(pct(sNo, sN));
   table('tNo', [
     {k:'puesto', l:'Puesto', r:1, h:r=>`<b>#${r.puesto}</b>`}, {k:'c', l:'Punto'},
-    {k:by, l:by==='no'?'Sin entrega':'% sin entrega', r:1, h:r=>barCell(r[by], maxV, fmtBy(r[by]))},
-    {k:'ruta', l:'Ruta'}, {k:'n', l:'Visitas', r:1}, {k:other, l:other==='no'?'Sin entrega':'% sin entrega', r:1, h:r=>other==='noP'?`<span class="${r.noP>=50?'late':''}">${fmtP(r.noP)}</span>`:fmtN(r.no)},
+    {k:by, l:lblOf(by), r:1, h:r=>barCell(r[by], maxV, fmtBy(r[by]))},
+    {k:'ruta', l:'Ruta'}, {k:'n', l:'Visitas', r:1}, {k:other, l:lblOf(other), r:1, h:r=>other==='noP'?`<span class="${r.noP>=50?'late':''}">${fmtP(r.noP)}</span>`:fmtN(r.no)},
+    ...(by === 'perd' ? [] : [{k:'perd', l:'Pérdida estimada', r:1, h:r=>fmtCOP(r.perd)}]),
+    {k:'perdV', l:'Pérdida por visita', r:1, h:r=>fmtCOP(r.perdV)},
     {k:'dow', l:'Día más frecuente'}, {k:'ultNo', l:'Última', h:r=>fDate(r.ultNo)}
   ], shown, {def:{k:'puesto',dir:1}, onRow:r=>setF('cliente', r.c), selVal:r=>r.c===F.cliente, empty:'Todas las visitas tuvieron entrega',
-    foot:['', `${fmtN(rows.length)} puntos`, by==='no'?fmtN(rows.reduce((s,r)=>s+r.no,0)):fmtP(pct(rows.reduce((s,r)=>s+r.no,0), rows.reduce((s,r)=>s+r.n,0))), '', '', fmtN(rows.reduce((s,r)=>s+r.n,0)),
-      other==='no'?fmtN(rows.reduce((s,r)=>s+r.no,0)):fmtP(pct(rows.reduce((s,r)=>s+r.no,0), rows.reduce((s,r)=>s+r.n,0))), '', '', '', '']});
+    foot:['', `${fmtN(rows.length)} puntos`, totOf(by), '', fmtN(sN), totOf(other), ...(by === 'perd' ? [] : [fmtCOP(sP)]), fmtCOP(perdVis ? perdTot/perdVis : null), '', '']});
 }
 
 function rRutas(){
@@ -3235,7 +3287,7 @@ function llenarEncabezado(){
   const tab = document.querySelector(`.tab[data-v="${view}"]`);
   const nombre = tab ? tab.childNodes[0].textContent.trim() : '';
   const chips = $('chips').innerText.trim(), filtros = /^Sin filtros/i.test(chips) ? '' : 'Filtros: ' + chips.replace(/\s*✕\s*/g, ' · ').replace(/[\s·]+$/, '');
-  $('printHead').innerHTML = `<div><h1>Tablero de servicios LIH · ${esc(nombre)}</h1><p style="text-align:left">${F.desde || F.hasta ? `Periodo: ${fDia(F.desde) || 'inicio'} al ${fDia(F.hasta) || 'hoy'}` : 'Todo el periodo'}${filtros ? ' · ' + esc(filtros) : ''} · generado el ${new Date().toLocaleDateString('es-CO')}</p></div>` +
+  $('printHead').innerHTML = `<div><h1>Tablero de servicios LIH · ${esc(nombre)}</h1><p style="text-align:left">${F.desde || F.hasta ? `Periodo: ${fDia(F.desde) || 'inicio'} al ${fDia(F.hasta) || 'hoy'}` : 'Todo el periodo'}${$('datosHasta').hidden ? '' : ' · ' + esc($('datosHasta').textContent.replace(/^\S+\s/, ''))}${filtros ? ' · ' + esc(filtros) : ''} · generado el ${new Date().toLocaleDateString('es-CO')}</p></div>` +
     `<p>Diseño y desarrollo<br><b>Abel Fernando Ochoa Lozada</b><br>Líder de proyecto LIH · coordinador.lih@quick.com.co</p>`;
   return nombre;
 }
