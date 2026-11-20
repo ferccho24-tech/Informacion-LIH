@@ -1147,7 +1147,7 @@ function tipoCliente(nombre){
 let TITULARES = new Map();   // ruta → mensajero titular
 function calcularTitulares(rows){
   TITULARES = new Map();
-  for (const [ruta, rs] of groupBy(rows.filter(r=>r.ruta !== 'Sin ruta'), r=>r.ruta)) TITULARES.set(ruta, sortedEntries(countBy(rs, r=>r.conductor))[0][0]);
+  for (const [ruta, rs] of groupBy(rows.filter(r=>r.ruta !== 'Sin ruta' && !esRutaEspecial(r.ruta)), r=>r.ruta)) TITULARES.set(ruta, sortedEntries(countBy(rs, r=>r.conductor))[0][0]);
 }
 const rutasDeTitular = c => [...TITULARES].filter(([,t])=>t===c).map(([r])=>r);
 function nConductores(R){ const rutas = new Set(R.map(r=>r.ruta)); return new Set([...TITULARES].filter(([ruta])=>rutas.has(ruta)).map(([,c])=>c)).size; }
@@ -1194,7 +1194,7 @@ function normRow(r){
 }
 // Ruta habitual de cada punto y clasificación fuera de ruta (usa todo el histórico)
 function enrich(rows){
-  const fixed = r => r.ruta !== 'Sin ruta' && !/ADICIONAL|ADMINISTRATIVO/i.test(r.ruta);
+  const fixed = r => r.ruta !== 'Sin ruta' && !/ADICIONAL|ADMINISTRATIVO/i.test(r.ruta) && !esRutaEspecial(r.ruta);
   // Rutas habituales = las que concentran al menos 20 % de las visitas del punto
   const habit = new Map(), habitSet = new Map();
   for (const [c, rs] of groupBy(rows.filter(fixed), r => r.cliente)){
@@ -1211,7 +1211,7 @@ function enrich(rows){
     }
     r.rutaHab = habit.get(r.cliente) || '';
     const hs = habitSet.get(r.cliente);
-    r.fueraCat = (r.obs === 'Adicional' || /ADICIONAL/i.test(r.cliente)) ? FUERA_CATS[0]
+    r.fueraCat = esRutaEspecial(r.ruta) ? '' : (r.obs === 'Adicional' || /ADICIONAL/i.test(r.cliente)) ? FUERA_CATS[0]
       : !fixed(r) ? FUERA_CATS[1]
       : (hs && !hs.has(r.ruta) && r.tipoCli !== 'Sede / gestión interna') ? FUERA_CATS[2] : '';
   }
@@ -1333,7 +1333,7 @@ function fillSelects(){
   for (const id in SEL){
     const [k, all] = SEL[id], sel = $(id), cur = F[k];
     const cnt = countBy(ALL.filter(r => passes(r, k)), r => r[k]);
-    const vals = [...cnt.keys()].sort((a,b)=>String(a).localeCompare(String(b),'es'));
+    const vals = [...cnt.keys()].filter(v => k !== 'ruta' || !esRutaEspecial(v)).sort((a,b)=>String(a).localeCompare(String(b),'es'));
     if (cur && !cnt.has(cur)) vals.unshift(cur);
     sel.innerHTML = `<option value="">${all}</option>` + vals.map(v => `<option value="${esc(v)}"${v===cur?' selected':''}>${esc(v)} (${fmtN(cnt.get(v)||0)})</option>`).join('');
     if (cur && !uniq(ALL, k).includes(cur)) F[k] = '';
@@ -1516,11 +1516,11 @@ function rResumen(){
     ['Cumplimiento llegada', fmtP(cp), `meta ${META.normal} min (urgencias ${META.urg})`, cumpClass(cp)],
     ['Ejecutados en fecha', fmtP(ef), 'finalizados el día programado', cumpClass(ef)],
     ['Llegadas tarde', fmtN(R.filter(r=>cumple(r)===false).length), `superan la meta de ${META.normal} min`, 'bad'],
-    ['Puntos atendidos', fmtN(new Set(R.map(r=>r.cliente)).size), `${fmtN(nConductores(R))} mensajeros · ${fmtN(new Set(R.map(r=>r.ruta)).size)} rutas`]
+    ['Puntos atendidos', fmtN(new Set(R.map(r=>r.cliente)).size), `${fmtN(nConductores(R))} mensajeros · ${fmtN(new Set(conRuta(R).map(r=>r.ruta)).size)} rutas`]
   ]);
   renderCmp(R);
   // Gráficos y tabla de la versión inicial
-  const crR = sortedEntries(countBy(R, r=>r.ruta));
+  const crR = sortedEntries(countBy(conRuta(R), r=>r.ruta));
   barH('chRuta', crR, {onPick:v=>setF('ruta',v), color:e=>e[0]===F.ruta?css('--accent-2'):css('--accent')});
   condTable('tCondRes');
   const hrs = Array(24).fill(0); for(const r of R) if(r.llegada && !r.fueraHorario) hrs[r.llegada.getHours()]++;
@@ -1596,7 +1596,7 @@ function mrAbrir(){
   if (!$('mrHasta').value) $('mrHasta').value = dias[dias.length-1] || '';
   $('mrDesde').min = $('mrHasta').min = dias[0] || ''; $('mrDesde').max = $('mrHasta').max = dias[dias.length-1] || '';
   const ru = $('mrRuta').value, co = $('mrCond').value;
-  $('mrRuta').innerHTML = '<option value="">Todas las rutas</option>' + [...new Set(con.map(r=>r.ruta))].sort((a,b)=>a.localeCompare(b,'es')).map(x=>`<option value="${esc(x)}"${x===ru?' selected':''}>${esc(titleCase(x))}</option>`).join('');
+  $('mrRuta').innerHTML = '<option value="">Todas las rutas</option>' + [...new Set(conRuta(con).map(r=>r.ruta))].sort((a,b)=>a.localeCompare(b,'es')).map(x=>`<option value="${esc(x)}"${x===ru?' selected':''}>${esc(titleCase(x))}</option>`).join('');
   $('mrCond').innerHTML = '<option value="">Todos los mensajeros</option>' + [...new Set(con.map(r=>r.conductor))].sort((a,b)=>a.localeCompare(b,'es')).map(x=>`<option value="${esc(x)}"${x===co?' selected':''}>${esc(x)}${rutasDeTitular(x).length ? '' : ' (apoyo)'}</option>`).join('');
   $('mr').showModal();
   mrMostrar();
@@ -1606,7 +1606,7 @@ function mrMostrar(){
   const tot = R.reduce((s,r)=>s+r.muestras,0);
   const dias = [...new Set(R.map(r=>r.dia))].sort();
   const sumBy = fn => sortedEntries([...groupBy(R, fn)].reduce((m,[k,rs])=>m.set(k, rs.reduce((s,r)=>s+r.muestras,0)), new Map()));
-  const porDia = sumBy(r=>r.dia), porRuta = sumBy(r=>r.ruta), porCond = sumBy(r=>r.conductor);
+  const porDia = sumBy(r=>r.dia), porRuta = sortedEntries([...groupBy(conRuta(R), r=>r.ruta)].reduce((m,[k,rs])=>m.set(k, rs.reduce((s,r)=>s+r.muestras,0)), new Map())), porCond = sumBy(r=>r.conductor);
   const filtros = [$('mrRuta').value && titleCase($('mrRuta').value), $('mrCond').value].filter(Boolean).join(' · ');
   // Per cápita (desde INICIO_PERCAPITA): mensajeros = titulares de las rutas presentes (11 sin filtros); días-mensajero = días trabajados de cada mensajero
   const Rpc = R.filter(r => r.dia >= INICIO_PERCAPITA && !excluidoPc(r.conductor)), totPc = Rpc.reduce((s,r)=>s+r.muestras,0);
@@ -1632,7 +1632,7 @@ function mrMostrar(){
   const rutas = porRuta.map(e=>e[0]);
   const byDR = new Map(); for (const r of R){ const k = r.dia+'|'+r.ruta; byDR.set(k, (byDR.get(k)||0) + r.muestras); }
   mk('chMrDia', {type:'bar', data:{labels:dias.map(d=>`${DOW[new Date(d+'T12:00').getDay()]} ${dLbl(d)}`),
-      datasets:rutas.map((ru,i)=>({label:titleCase(ru), data:dias.map(d=>byDR.get(d+'|'+ru)||0), backgroundColor:mrColor(i, rutas.length), borderRadius:2}))},
+      datasets:rutas.map((ru,i)=>({label:titleCase(ru), data:dias.map(d=>byDR.get(d+'|'+ru)||0), backgroundColor:mrColor(i, rutas.length), borderRadius:2})).concat(R.some(r=>esRutaEspecial(r.ruta)) ? [{label:'Domingos y festivos', data:dias.map(d=>R.filter(r=>r.dia===d && esRutaEspecial(r.ruta)).reduce((s,r)=>s+r.muestras,0)), backgroundColor:css('--c3'), borderRadius:2}] : [])},
     options:{scales:{x:{stacked:true, ticks:{color:css('--muted'), maxRotation:60}, grid:{display:false}}, y:{stacked:true, beginAtZero:true, ticks:{color:css('--muted')}, grid:{color:css('--line')}}},
       plugins:{legend:{position:'bottom', labels:{color:css('--muted'), boxWidth:12}},
         tooltip:Object.assign(tt(),{mode:'index', intersect:false, filter:i=>i.raw>0, callbacks:{footer:items=>'Total del día: '+fmtN(items.reduce((s,i)=>s+i.raw,0))}})}}});
@@ -1758,11 +1758,13 @@ function cmMostrar(){
   '2026-10': {
     items: [
       {cod:'311', con:'Coordinador de proyecto', cant:1, vu:2874369},
-      {cod:'311', con:'Usuarios plataforma Enterprise', cant:20, vu:131744},
+      {cod:'311', con:'Usuarios plataforma Enterprise', cant:11, vu:131744},   // 11 usuarios activos de Smart Quick; la factura traía 20 (coordinación, 20/11/2026)
       {cod:'312', con:'Mensajero motorizado turno 8 horas', cant:7, vu:4416647},
       {cod:'312', con:'Mensajero motorizado turno 6 horas', cant:3, vu:3825250}   // la factura traía 2; la coordinación pidió sumar el tercero (26/10/2026)
     ],
-    aiu:0, iva:0, reteFtePct:1, reteIva:0, reteIca:0, pago:'Crédito 30 días'   // retención en la fuente = 1 % del valor bruto
+    aiu:0, iva:0, reteFtePct:1, reteIva:0, reteIca:0, pago:'Crédito 30 días',   // retención en la fuente = 1 % del valor bruto
+    // Se facturaron 20 usuarios ($2.634.880) y son 11 activos ($1.449.184): la diferencia va por nota crédito
+    notaCredito: {valor:1185696, motivo:'usuarios plataforma Smart Quick: facturados 20 ($2.634.880), activos 11 ($1.449.184)'}
   }
 };
 /*PRIVADO-FACTURAS-FIN*/
@@ -1873,7 +1875,8 @@ function pgFijo(kf, kAd, adV, kLugar){
   donut('chPgDon', It.map(x=>[x.con, x.vt]), c => pal[It.findIndex(x=>x.con===c) % pal.length], null, bruto);
   barH('chPgCon', It.map(x=>[x.con, x.vt]), {label:'Valor total', color:e=>pal[It.findIndex(x=>x.con===e[0]) % pal.length], fmt:v=>fmtCOP(v)});
   $('pgInfo').textContent = `${kf.length > 1 ? `Facturas de ${facts} sumadas por concepto · ` : ''}Valor bruto ${fmtCOP(bruto)} − retención en la fuente ${fmtCOP(reteFte)} = total factura ${fmtCOP(total)} · AIU, IVA, retención de IVA e ICA en $0` +
-    dif.map(o => ` · En operación hay ${o.n} mensajeros de ${o.h} h y la factura cobra ${o.fac}: ${o.n-o.fac} sin facturar (${fmtCOP((o.n-o.fac)*o.vu)} al valor unitario)`).join('');
+    dif.map(o => ` · En operación hay ${o.n} mensajeros de ${o.h} h y la factura cobra ${o.fac}: ${o.n-o.fac} sin facturar (${fmtCOP((o.n-o.fac)*o.vu)} al valor unitario)`).join('') +
+    kf.filter(k => FACTURAS[k] && FACTURAS[k].notaCredito).map(k => ` · Nota crédito de ${mesNombre(k)}: ${fmtCOP(FACTURAS[k].notaCredito.valor)} por ${FACTURAS[k].notaCredito.motivo}`).join('');
   table('tPg', [
     {k:'n', l:'Ítem', r:1}, {k:'cod', l:'Código'}, {k:'con', l:'Concepto'}, {k:'cant', l:'Cantidad', r:1},
     {k:'vu', l:'Valor unitario', r:1, h:r=>fmtCOP(r.vu)}, {k:'vt', l:'Valor total', r:1, h:r=>`<b>${fmtCOP(r.vt)}</b>`},
@@ -1904,6 +1907,8 @@ function pgAdicionales(nom, ad, adV, nRec, nOtros){
 const RUTA_ADMIN = 'MENSAJERO ADMINISTRATIVO', RUTA_CHIA = 'CHIA';
 // Rutas de domingo y festivo: cuentan en todo el tablero, pero no son rutas fijas (no entran al per cápita ni al costo por tubo por ruta)
 const esRutaEspecial = ru => /^(DOMINGO|.*FESTIVO)$/i.test(String(ru).trim());
+// Los domingos y festivos cuentan en el informe (servicios, muestras, puntos, días) pero no se muestran como una ruta
+const conRuta = R => R.filter(r => !esRutaEspecial(r.ruta));
 function mrPerRuta(R){
   const conChia = $('mrChia').value === 'con';
   const B = R.filter(r => r.dia >= INICIO_PERCAPITA && r.ruta !== RUTA_ADMIN && !esRutaEspecial(r.ruta) && (conChia ? (r.ruta === RUTA_CHIA || !excluidoPc(r.conductor)) : (r.ruta !== RUTA_CHIA && !excluidoPc(r.conductor))));
@@ -1954,7 +1959,7 @@ function mrPerCapita(R, tot, nMens, diasMens){
 }
 // Cuadro día × ruta (o día × mensajero) con totales por fila y columna
 function mrCuadro(R, dias){
-  const por = $('mrPor').value, key = por === 'ruta' ? (r=>r.ruta) : (r=>r.conductor);
+  const por = $('mrPor').value, key = por === 'ruta' ? (r=>esRutaEspecial(r.ruta) ? 'Domingos y festivos' : r.ruta) : (r=>r.conductor);
   $('mrCuadroT').textContent = por === 'ruta' ? 'Cuadro de muestras por día y ruta' : 'Cuadro de muestras por día y mensajero';
   const cols = sortedEntries([...groupBy(R, key)].reduce((m,[k,rs])=>m.set(k, rs.reduce((s,r)=>s+r.muestras,0)), new Map())).map(e=>e[0]);
   const cell = new Map(); for (const r of R){ const k = r.dia+'|'+key(r); cell.set(k, (cell.get(k)||0) + r.muestras); }
@@ -1968,7 +1973,7 @@ function mrCuadro(R, dias){
     `</tbody><tfoot><tr><td><b>Total</b></td>${cols.map(c=>`<td class="r num tot">${fmtN(totCol(c))}</td>`).join('')}<td class="r num tot">${fmtN(R.reduce((s,r)=>s+r.muestras,0))}</td></tr></tfoot>`;
 }
 function mrCsv(){
-  const R = mrBase(), dias = [...new Set(R.map(r=>r.dia))].sort(), por = $('mrPor').value, key = por === 'ruta' ? (r=>r.ruta) : (r=>r.conductor);
+  const R = mrBase(), dias = [...new Set(R.map(r=>r.dia))].sort(), por = $('mrPor').value, key = por === 'ruta' ? (r=>esRutaEspecial(r.ruta) ? 'Domingos y festivos' : r.ruta) : (r=>r.conductor);
   const cols = [...new Set(R.map(key))].sort((a,b)=>a.localeCompare(b,'es'));
   const cell = new Map(); for (const r of R){ const k = r.dia+'|'+key(r); cell.set(k, (cell.get(k)||0) + r.muestras); }
   const rows = dias.map(d => [fDia(d), DOW[new Date(d+'T12:00').getDay()], ...cols.map(c=>cell.get(d+'|'+c) ?? ''), cols.reduce((s,c)=>s+(cell.get(d+'|'+c)||0),0)]);
@@ -2017,7 +2022,7 @@ function capAbrir(){
 }
 function capMostrar(){
   const base = capBase();
-  const rutas = [...groupBy(base, r=>r.ruta)].map(([ruta, rs]) => ({ruta, n:rs.length, ...capResumen(capDias(rs))}))
+  const rutas = [...groupBy(conRuta(base), r=>r.ruta)].map(([ruta, rs]) => ({ruta, n:rs.length, ...capResumen(capDias(rs))}))
     .filter(r => r.dias >= 3).sort((a,b)=>(b.util||0)-(a.util||0));
   $('capRuta').innerHTML = '<option value="">— Elija una ruta —</option>' + rutas.slice().sort((a,b)=>a.ruta.localeCompare(b.ruta,'es'))
     .map(r=>`<option value="${esc(r.ruta)}"${r.ruta===capSel?' selected':''}>${esc(titleCase(r.ruta))} · ${fmtP(r.util)} de uso</option>`).join('');
@@ -2337,7 +2342,7 @@ const lista = arr => arr.length <= 1 ? (arr[0]||'') : arr.slice(0,-1).join(', ')
 function rInforme(){
   const R = FILT, n = R.length, days = opDays, nd = days.length;
   if (!n){ $('infLead').textContent = 'No hay servicios con los filtros seleccionados.'; $('infCards').innerHTML=''; $('infHall').innerHTML=''; $('infRec').innerHTML=''; return; }
-  const P = new Set(R.map(r=>r.cliente)).size, C = nConductores(R), K = new Set(R.map(r=>r.ruta)).size;
+  const P = new Set(R.map(r=>r.cliente)).size, C = nConductores(R), K = new Set(conRuta(R).map(r=>r.ruta)).size;
   const proc = PROC.filter(r => (!F.desde || r.dia >= F.desde) && (!F.hasta || r.dia <= F.hasta)).length;
   const cp = cumpPct(R), L = R.map(r=>r.tL).filter(clean);
   const conMu = R.filter(r=>r.muestras!=null), muTot = conMu.reduce((s,r)=>s+r.muestras,0), dMu = new Set(conMu.map(r=>r.dia)).size;
@@ -2375,7 +2380,7 @@ function rInforme(){
     const d = av(a) - av(b);
     H.push(`La llegada a tiempo ${Math.abs(d) < 1 ? 'se mantuvo estable' : d > 0 ? 'mejoró' : 'bajó'} en los últimos 7 días de operación: pasó de <b>${fmtP(av(b))}</b> a <b>${fmtP(av(a))}</b>.`);
   }
-  const rutas = [...groupBy(R, r=>r.ruta)].filter(([,rs])=>rs.length>=20).map(([ruta,rs])=>({ruta, cp:cumpPct(rs), no:pct(rs.filter(r=>r.noEntrega).length, rs.length)})).filter(r=>r.cp!=null).sort((a,b)=>b.cp-a.cp);
+  const rutas = [...groupBy(conRuta(R), r=>r.ruta)].filter(([,rs])=>rs.length>=20).map(([ruta,rs])=>({ruta, cp:cumpPct(rs), no:pct(rs.filter(r=>r.noEntrega).length, rs.length)})).filter(r=>r.cp!=null).sort((a,b)=>b.cp-a.cp);
   if (rutas.length >= 2) H.push(`La ruta <b>${titleCase(rutas[0].ruta)}</b> es la más puntual (${fmtP(rutas[0].cp)} a tiempo) y <b>${titleCase(rutas[rutas.length-1].ruta)}</b> la que más se demora (${fmtP(rutas[rutas.length-1].cp)}).`);
   const muP = sortedEntries([...groupBy(conMu, r=>r.cliente)].reduce((m,[c,rs])=>m.set(c, rs.reduce((s,r)=>s+r.muestras,0)), new Map()));
   if (muP.length >= 3 && muTot) H.push(`Tres puntos entregan el <b>${fmtP(pct(muP.slice(0,3).reduce((s,e)=>s+e[1],0), muTot))}</b> de todas las muestras: ${lista(muP.slice(0,3).map(e=>`<b>${titleCase(e[0])}</b> (${fmtN(e[1])})`))}.`);
@@ -2644,7 +2649,7 @@ function rProcesos(){
   kpis('kProc', [
     ['Visitas a PROCESOS', fmtN(n), `${fmtP(pct(n, tot))} de todos los servicios`],
     ['Promedio diario', fmtD(days.length ? n/days.length : null), `${days.length} días con visitas`],
-    ['Rutas que llegan', fmtN(new Set(R.map(r=>r.ruta)).size), `${fmtN(nConductores(R))} mensajeros`],
+    ['Rutas que llegan', fmtN(new Set(conRuta(R).map(r=>r.ruta)).size), `${fmtN(nConductores(R))} mensajeros`],
     ['Entregas', fmtN(ct.get('Entrega')||0), fmtP(pct(ct.get('Entrega')||0, n))+' de las visitas'],
     ['Recolecciones', fmtN(ct.get('Se recoge')||0), fmtP(pct(ct.get('Se recoge')||0, n))+' de las visitas'],
     ['Documentación', fmtN(ct.get('Documentacion')||0), `${fmtN(ct.get('No hay')||0)} visitas “No hay”`],
@@ -2655,13 +2660,13 @@ function rProcesos(){
   mk('chProcDia', {type:'bar', data:{labels:days.map(dLbl), datasets:tipos.map(t=>({label:t, data:days.map(d=>byDT.get(d+'|'+t)||0), backgroundColor:tipoColor(t), borderRadius:2}))},
     options:{scales:axes({stacked:true}), plugins:{legend:{position:'bottom',labels:{color:css('--muted'),boxWidth:12}}, tooltip:Object.assign(tt(),{mode:'index',intersect:false,callbacks:{footer:items=>'Total: '+items.reduce((s,i)=>s+i.parsed.y,0)}})}}});
   donut('chProcTipo', tipos.map(t=>[t, ct.get(t)]), tipoColor, null, n);
-  barH('chProcRuta', sortedEntries(countBy(R, r=>r.ruta)), {label:'Visitas', color:css('--c5')});
+  barH('chProcRuta', sortedEntries(countBy(conRuta(R), r=>r.ruta)), {label:'Visitas', color:css('--c5')});
   const hrs = Array(24).fill(0); for (const r of R) if (r.llegada && !r.fueraHorario) hrs[r.llegada.getHours()]++;
   $('procHoraNota').textContent = 'A qué hora se llega a PROCESOS' + notaFH(R);
   let h0 = hrs.findIndex(v=>v), h1 = 23 - [...hrs].reverse().findIndex(v=>v); if (h0<0){h0=6;h1=18;}
   const hl = []; for (let x=h0; x<=h1; x++) hl.push(x);
   mk('chProcHora', {type:'bar', data:{labels:hl.map(x=>`${pad(x)}:00`), datasets:[{label:'Visitas', data:hl.map(x=>hrs[x]), backgroundColor:css('--accent'), borderRadius:3}]}, options:{plugins:{legend:{display:false}}, scales:axes()}});
-  const rows = [...groupBy(R, r=>r.conductor)].map(([c, rs]) => ({c, n:rs.length, dias:new Set(rs.map(r=>r.dia)).size, rutas:[...new Set(rs.map(r=>r.ruta))].join(', '),
+  const rows = [...groupBy(R, r=>r.conductor)].map(([c, rs]) => ({c, n:rs.length, dias:new Set(rs.map(r=>r.dia)).size, rutas:[...new Set(conRuta(rs).map(r=>r.ruta))].join(', ') || '–',
     ent:rs.filter(r=>r.tipo==='Entrega').length, rec:rs.filter(r=>r.tipo==='Se recoge').length, doc:rs.filter(r=>r.tipo==='Documentacion').length,
     tL:median(rs.map(r=>r.tL).filter(clean)), tS:median(rs.map(r=>r.tS).filter(clean)), cp:cumpPct(rs)}));
   const max = Math.max(1, ...rows.map(r=>r.n));
@@ -2689,7 +2694,7 @@ function cumpDiaRows(R){
     const ok = med.filter(r=>r.tL <= metaOf(r)).length, late = med.length - ok;
     const L = med.map(r=>r.tL).filter(clean);
     const urg = rs.filter(r=>r.urg && r.tL!=null);
-    const worst = [...groupBy(med, r=>r.ruta)].filter(([,x])=>x.length>=5).map(([ruta,x])=>[ruta, cumpPct(x)]).sort((a,b)=>a[1]-b[1])[0];
+    const worst = [...groupBy(conRuta(med), r=>r.ruta)].filter(([,x])=>x.length>=5).map(([ruta,x])=>[ruta, cumpPct(x)]).sort((a,b)=>a[1]-b[1])[0];
     const lateDrv = sortedEntries(countBy(med.filter(r=>r.tL>metaOf(r)), r=>r.conductor))[0];
     const cp = pct(ok, med.length);
     return {d, dow:DOW[new Date(d+'T12:00').getDay()], n:rs.length, med_n:med.length, sinDato:rs.length-med.length, ok, late, cp,
@@ -2771,12 +2776,13 @@ function rTiempos(){
   const hist = B.map(([a,b])=>R.filter(r=>r.tL!=null && r.tL>=a && r.tL<b).length);
   mk('chHist', {type:'bar', data:{labels:B.map(([a,b])=>b===Infinity?`>${a}`:`${a}-${b}`), datasets:[{label:'Servicios', data:hist, backgroundColor:B.map(([a])=>a>=META.normal?css('--bad'):css('--accent')), borderRadius:3}]},
     options:{plugins:{legend:{display:false}}, scales:axes()}});
-  const rutas = sortedEntries(countBy(R, r=>r.ruta)).map(e=>e[0]);
-  const byRuta = groupBy(R, r=>r.ruta);
+  const rutas = sortedEntries(countBy(conRuta(R), r=>r.ruta)).map(e=>e[0]);
+  const byRuta = groupBy(conRuta(R), r=>r.ruta);
   const cr = rutas.map(x=>[x, +(cumpPct(byRuta.get(x))||0).toFixed(1)]).sort((a,b)=>a[1]-b[1]);
   barH('chCumpRuta', cr, {color:e=>e[1]>=90?css('--good'):e[1]>=75?css('--warn'):css('--bad'), onPick:v=>setF('ruta',v), label:'% cumplimiento', fmt:v=>v+' %'});
 }
 function tiemposRuta(id, R){
+  R = conRuta(R);
   const byRuta = groupBy(R, r=>r.ruta), rutas = sortedEntries(countBy(R, r=>r.ruta)).map(e=>e[0]);
   const med = (x,k) => { const v = median(byRuta.get(x).map(r=>r[k]).filter(clean)); return v==null?null:Math.round(v); };
   mk(id, {type:'bar', data:{labels:rutas, datasets:[
@@ -2786,7 +2792,7 @@ function tiemposRuta(id, R){
 }
 function condTable(id){
   const rows = [...groupBy(FILT, r=>r.conductor)].map(([c, rs]) => ({c, n:rs.length, dias:new Set(rs.map(r=>r.dia)).size,
-    rutas:[...new Set(rs.map(r=>r.ruta))].join(', '), cp:cumpPct(rs), tL:median(rs.map(r=>r.tL).filter(clean)), tS:median(rs.map(r=>r.tS).filter(clean)),
+    rutas:[...new Set(conRuta(rs).map(r=>r.ruta))].join(', ') || '–', cp:cumpPct(rs), tL:median(rs.map(r=>r.tL).filter(clean)), tS:median(rs.map(r=>r.tS).filter(clean)),
     porDia: rs.length / new Set(rs.map(r=>r.dia)).size, urg:rs.filter(r=>r.urg).length, no:pct(rs.filter(r=>r.noEntrega).length, rs.length),
     mu:rs.reduce((s,r)=>s+(r.muestras||0),0)}));
   const max = Math.max(1,...rows.map(r=>r.n));
@@ -2924,7 +2930,7 @@ function rUrg(){
   let uh0 = hrs.findIndex(v=>v), uh1 = 23 - [...hrs].reverse().findIndex(v=>v); if (uh0 < 0){ uh0 = 8; uh1 = 17; }
   const hl = []; for(let h=uh0; h<=uh1; h++) hl.push(h);
   mk('chUrgHora', {type:'bar', data:{labels:hl.map(h=>`${pad(h)}h`), datasets:[{label:'Urgencias', data:hl.map(h=>hrs[h]), backgroundColor:css('--bad'), borderRadius:3}]}, options:{plugins:{legend:{display:false}}, scales:axes()}});
-  barH('chUrgRuta', sortedEntries(countBy(U, r=>r.ruta)), {label:'Urgencias', color:css('--c5'), onPick:v=>setF('ruta',v)});
+  barH('chUrgRuta', sortedEntries(countBy(conRuta(U), r=>r.ruta)), {label:'Urgencias', color:css('--c5'), onPick:v=>setF('ruta',v)});
   // Cuadros de estadística de urgencias
   const totCli = countBy(R, r=>r.cliente);
   const uc = [...groupBy(U, r=>r.cliente)].map(([c, rs]) => {
@@ -2948,7 +2954,7 @@ function rUrg(){
     {k:'p', l:'%', r:1, h:r=>fmtP(r.p)}, {k:'ac', l:'% acumulado', r:1, h:r=>fmtP(r.ac)}, {k:'med', l:'Llegada', r:1, h:r=>fmtMin(r.med)}, {k:'cp', l:'Cumple', r:1, h:r=>fmtP(r.cp)}, {k:'cli', l:'Cliente principal'}
   ], uh, {def:{k:'h',dir:1}, empty:'Sin urgencias con estos filtros',
     foot:['Total', '', fmtN(U.length), '100 %', '', fmtMin(median(U.map(r=>r.tL).filter(clean))), fmtP(cumpPct(U)), '']});
-  const ur = [...groupBy(U, r=>r.ruta)].map(([ruta, rs]) => ({ruta, n:rs.length, p:pct(rs.length, U.length), pS:pct(rs.length, R.filter(r=>r.ruta===ruta).length),
+  const ur = [...groupBy(conRuta(U), r=>r.ruta)].map(([ruta, rs]) => ({ruta, n:rs.length, p:pct(rs.length, U.length), pS:pct(rs.length, R.filter(r=>r.ruta===ruta).length),
     med:median(rs.map(r=>r.tL).filter(clean)), cp:cumpPct(rs), cond:sortedEntries(countBy(rs, r=>r.conductor))[0][0]}));
   table('tUrgRutaSt', [
     {k:'ruta', l:'Ruta'}, {k:'n', l:'Urg.', r:1}, {k:'p', l:'%', r:1, h:r=>fmtP(r.p)}, {k:'pS', l:'% de la ruta', r:1, h:r=>fmtP(r.pS)},
@@ -3077,7 +3083,7 @@ function rNo(){
 }
 
 function rRutas(){
-  const R = FILT;
+  const R = conRuta(FILT);   // domingos y festivos no son una ruta: cuentan en el resto del informe
   const rows = [...groupBy(R, r=>r.ruta)].map(([ruta, rs]) => ({ruta, n:rs.length, dias:new Set(rs.map(r=>r.dia)).size, puntos:new Set(rs.map(r=>r.cliente)).size,
     cond:[...new Set(rs.map(r=>r.conductor))].join(', '), porDia: rs.length/new Set(rs.map(r=>r.dia)).size,
     cp:cumpPct(rs), tL:median(rs.map(r=>r.tL).filter(clean)), tS:median(rs.map(r=>r.tS).filter(clean)),
@@ -3156,7 +3162,7 @@ function buildAlerts(){
     puntoRows(R).filter(p=>p.dias >= Math.max(5, opDays.length*.5) && dKey(p.last) < lim).forEach(p => A.push({sev:'warn', t:`${p.c} no ha sido visitado desde el ${fDate(p.last)}`, d:`Es un punto regular (${p.dias} días con visita). Verificar si se suspendió el servicio.`, act:()=>{setF('cliente',p.c); go('puntos');}}));
   }
   // Rutas con cumplimiento bajo
-  [...groupBy(R, r=>r.ruta)].forEach(([ruta, rs]) => { const c = cumpPct(rs); if (rs.length>=20 && c!=null && c<75) A.push({sev:'warn', t:`Ruta ${ruta} con cumplimiento de ${fmtP(c)}`, d:`${rs.filter(r=>cumple(r)===false).length} llegadas tarde de ${rs.length} servicios.`, act:()=>{setF('ruta',ruta); go('tiempos');}}); });
+  [...groupBy(conRuta(R), r=>r.ruta)].forEach(([ruta, rs]) => { const c = cumpPct(rs); if (rs.length>=20 && c!=null && c<75) A.push({sev:'warn', t:`Ruta ${ruta} con cumplimiento de ${fmtP(c)}`, d:`${rs.filter(r=>cumple(r)===false).length} llegadas tarde de ${rs.length} servicios.`, act:()=>{setF('ruta',ruta); go('tiempos');}}); });
   // Conductores con mediana por encima de la meta
   [...groupBy(R, r=>r.conductor)].forEach(([c, rs]) => { const m = median(rs.map(r=>r.tL).filter(clean)); if (rs.length>=20 && m!=null && m>META.normal) A.push({sev:'warn', t:`${c}: mediana de llegada ${fmtMin(m)}`, d:`Por encima de la meta de ${META.normal} min.`, act:()=>{setF('conductor',c); go('tiempos');}}); });
   // Novedades registradas
