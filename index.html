@@ -203,6 +203,13 @@ a.foto:hover{text-decoration:underline}
 #cm::backdrop{background:rgba(10,20,18,.55)}
 .cm-f{grid-template-columns:repeat(2,minmax(0,1fr))}
 
+/* Detalle por cliente */
+.btn-dc{background:var(--c6);border-color:var(--c6);color:var(--surface);font-weight:600}
+.btn-dc:hover{filter:brightness(1.1);color:var(--surface);border-color:var(--c6)}
+#dc{border:0;border-radius:14px;padding:0;width:min(1200px,calc(100vw - 32px));max-height:calc(100vh - 40px);background:var(--bg);color:var(--ink);box-shadow:0 20px 60px rgba(0,0,0,.35)}
+#dc::backdrop{background:rgba(10,20,18,.55)}
+.dc-f{grid-template-columns:repeat(3,minmax(0,1fr)) minmax(0,1.5fr)}
+
 /* Pagos del cliente */
 .btn-pg{background:var(--accent);border-color:var(--accent);color:var(--surface);font-weight:600}
 .btn-pg:hover{filter:brightness(1.1);color:var(--surface);border-color:var(--accent)}
@@ -243,6 +250,31 @@ a.foto:hover{text-decoration:underline}
 .fsum-t{font-weight:600}
 .fbox .filters{border:0;border-top:1px solid var(--line);border-radius:0 0 12px 12px}
 .tab-main{color:var(--ink)}
+
+/* Índice: presentación de inicio (versión corta) */
+.idx{display:grid;gap:16px}
+.idx-hero{background:linear-gradient(135deg, var(--accent) 0%, color-mix(in srgb, var(--accent) 70%, var(--ink)) 100%);color:var(--surface);border-radius:14px;padding:22px 26px;display:grid;gap:6px}
+.idx-hero .eyebrow{font-size:.75rem;text-transform:uppercase;letter-spacing:.12em;font-weight:700;opacity:.85}
+.idx-hero h2{font-size:2.2rem;line-height:1;text-transform:none;letter-spacing:0}
+.idx-hero p{margin:0;font-size:1rem;opacity:.95}
+.idx-hero .firma{display:flex;flex-wrap:wrap;gap:4px 20px;font-size:.84rem;opacity:.9}
+.idx-hero .firma b{font-weight:600}
+.idx-grp{display:grid;gap:8px}
+.idx-grp h3{font-size:1.05rem;text-transform:uppercase;letter-spacing:.06em}
+.idx-list{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+@media (max-width:1100px){.idx-list{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:560px){.idx-list{grid-template-columns:1fr}.idx-hero h2{font-size:1.8rem}}
+.idx-item{all:unset;box-sizing:border-box;cursor:pointer;background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:10px;padding:10px 12px;display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center}
+.idx-item:hover,.idx-item:focus-visible{border-color:var(--accent);outline:none}
+.idx-item.btnx{border-left-color:var(--accent-2)} .idx-item.btnx:hover{border-color:var(--accent-2)}
+.idx-n{font-family:var(--f-display);font-size:1.5rem;font-weight:700;color:var(--accent);line-height:1;min-width:1.4ch;text-align:right}
+.idx-item.btnx .idx-n{color:var(--accent-2)}
+.idx-item b{display:block;font-size:.95rem;color:var(--ink)}
+.idx-item small{display:block;color:var(--muted);font-size:.8rem;margin-top:1px}
+.idx-go{font-size:.78rem;font-weight:600;color:var(--accent);white-space:nowrap}
+.idx-item.btnx .idx-go{color:var(--accent-2)}
+.idx-tips{margin:0;background:var(--surface);border:1px dashed var(--line);border-radius:10px;padding:10px 14px;color:var(--muted);font-size:.86rem}
+.idx-tips b{color:var(--ink)}
 
 /* Informe para el cliente */
 .inf{display:grid;gap:18px}
@@ -292,6 +324,13 @@ a.foto:hover{text-decoration:underline}
 .solo-graficas .dsw{display:none!important}
 /* Dash 2: sin la pestaña de puntos de atención ni el filtro de punto */
 .solo-graficas .tab[data-v="puntos"], .solo-graficas .filters label[for="fCliente"]{display:none!important}
+/* Dash 2 sin información repetida (revisión 24/11/2026). El Dash 1 de respaldo conserva todo. */
+.solo-graficas .tab[data-v="alertas"]{display:none!important}                               /* la tendencia semanal ya está en el Informe */
+.solo-graficas #v-informe .panel:has(#chInfTop), .solo-graficas #v-informe .panel:has(#chInfRes){display:none!important}   /* Top de muestras y resultado de visitas: ya están en Muestras por punto y en Resumen */
+.solo-graficas #v-rs .panel:has(#chRSDia), .solo-graficas #v-rs .panel:has(#rsGrid){display:none!important}             /* muestras por día de un punto: botón "Muestras por punto" */
+.solo-graficas #v-noentrega .panel:has(#chNoPerd){display:none!important}                  /* la pérdida por cliente ya va en "Puntos con más visitas sin entrega" */
+.solo-graficas #v-noentrega .panel:has(#chNoCli){grid-column:span 12}
+.solo-graficas #mr .cap-2:has(#chMrRuta){display:none!important}                            /* muestras por ruta y por mensajero: ya están en los per cápita */
 
 /* Impresión / PDF: solo el informe */
 @media print{
@@ -400,6 +439,7 @@ a.foto:hover{text-decoration:underline}
       <button class="btn btn-mr" id="mrOpen" type="button">Muestras recogidas</button>
       <button class="btn btn-cm" id="cmOpen" type="button">Costo por mensajero</button>
       <button class="btn btn-pg" id="pgOpen" type="button">Pagos del cliente</button>
+      <button class="btn btn-dc" id="dcOpen" type="button">Detalle por cliente</button>
       <nav class="dsw" aria-label="Elegir presentación">
         <a id="dsw1" href="#">Dash 1 · Completo</a>
         <a id="dsw2" href="#">Dash 2 · Gráficas</a>
@@ -569,6 +609,39 @@ a.foto:hover{text-decoration:underline}
   </div>
 </dialog>
 
+<!-- Detalle por cliente: muestras y costo de cada cliente, con filtro de ruta y fechas -->
+<dialog id="dc" aria-labelledby="dcTitle">
+  <div class="mpp-in">
+    <header class="mpp-head">
+      <div>
+        <span class="inf-eyebrow">Detalle por cliente</span>
+        <h2 id="dcTitle">Muestras y costo por cliente</h2>
+      </div>
+      <button class="btn" id="dcClose" type="button" aria-label="Cerrar">Cerrar ✕</button>
+    </header>
+    <div class="mpp-f dc-f">
+      <label for="dcRuta" class="field">Ruta<select id="dcRuta"></select></label>
+      <label for="dcDesde" class="field">Desde<input type="date" id="dcDesde"></label>
+      <label for="dcHasta" class="field">Hasta<input type="date" id="dcHasta"></label>
+      <label for="dcBuscar" class="field">Buscar cliente<input type="search" id="dcBuscar" placeholder="Escriba parte del nombre…" autocomplete="off"></label>
+    </div>
+    <div class="kpis k3" id="dcK"></div>
+    <section class="cap-box">
+      <h3>Costo y muestras por cliente</h3>
+      <p class="meta" id="dcSub"></p>
+      <div class="chart" id="dcWrap"><canvas id="chDc"></canvas></div>
+    </section>
+    <section class="cap-box">
+      <div class="tools" style="justify-content:space-between">
+        <h3>Cuadro por cliente</h3>
+        <button class="btn" id="dcCsv" type="button">Descargar en Excel (CSV)</button>
+      </div>
+      <p class="meta" id="dcInfo"></p>
+      <div class="tscroll" style="max-height:460px"><table id="tDc"></table></div>
+    </section>
+  </div>
+</dialog>
+
 <!-- Capacidad instalada por ruta (recorrido) -->
 <dialog id="cap" aria-labelledby="capTitle">
   <div class="mpp-in">
@@ -676,6 +749,7 @@ a.foto:hover{text-decoration:underline}
 
   <div class="tabbar">
   <nav class="tabs" role="tablist" id="tabs">
+    <button class="tab tab-main" role="tab" data-v="indice">Índice</button>
     <button class="tab tab-main" role="tab" data-v="informe">Informe</button>
     <button class="tab" role="tab" data-v="resumen">Resumen operativo</button>
     <button class="tab" role="tab" data-v="tiempos">Tiempos de llegada</button>
@@ -691,6 +765,19 @@ a.foto:hover{text-decoration:underline}
   </div>
   <!-- Encabezado que solo aparece al imprimir -->
   <div class="print-head" id="printHead"></div>
+
+  <!-- ÍNDICE: presentación de inicio con la guía de lo que trae el tablero y dónde está -->
+  <section class="view" id="v-indice" hidden>
+    <article class="idx">
+      <header class="idx-hero">
+        <span class="eyebrow">Quick · Mensajería LIH · Bogotá</span>
+        <h2>Tablero de servicios LIH</h2>
+        <p>Guía rápida: qué encuentra en el tablero y dónde. Haga clic en cada recuadro para ir.</p>
+        <div class="firma"><span>Diseño y desarrollo: <b>Abel Fernando Ochoa Lozada</b> · Líder de proyecto LIH</span><span id="idxDatos"></span></div>
+      </header>
+      <div id="idxBody" style="display:grid;gap:14px"></div>
+    </article>
+  </section>
 
   <!-- INFORME: resumen en lenguaje sencillo para el cliente -->
   <section class="view" id="v-informe" hidden>
@@ -1094,7 +1181,7 @@ const FUERA_CATS = ['Adicional solicitado','Mensajero adicional / sin ruta','Ate
 
 let PROC = [];
 const esProcesos = r => r.cliente.trim().toUpperCase() === 'PROCESOS';
-let ALL = [], FILT = [], charts = {}, page = 0, view = 'informe';
+let ALL = [], FILT = [], charts = {}, page = 0, view = 'indice';   // la herramienta abre en el Índice
 let timer = null, nextAt = 0, lastOk = null, opDays = [];
 const F = {desde:'',hasta:'',ruta:'',conductor:'',tipoCli:'',cliente:'',tipo:'',obs:'',estado:'',novedad:'',q:''};
 // Metas acordadas: llegada a tiempo ≤ 36 min (servicios normales), ≤ 30 min (urgencias); objetivo diario 90 %
@@ -1488,9 +1575,10 @@ const cumpTag = r => { const c = cumple(r); return c==null ? '–' : c ? `<span 
 
 /* ---------- Vistas ---------- */
 function renderView(){
-  if (SOLO_GRAFICAS){ document.body.classList.add('solo-graficas'); if (view === 'puntos') view = 'informe'; }   // Dash 2 no tiene la pestaña de puntos
+  if (SOLO_GRAFICAS){ document.body.classList.add('solo-graficas'); if (view === 'puntos' || view === 'alertas') view = 'informe'; }   // Dash 2 no tiene las pestañas de puntos ni de alertas
   document.querySelectorAll('.tab').forEach(t => t.setAttribute('aria-selected', t.dataset.v===view));
   document.querySelectorAll('.view').forEach(v => v.hidden = v.id !== 'v-'+view);
+  if (view === 'indice'){ rIndice(); return; }   // el Índice no necesita datos
   if (!ALL.length) return;
   Chart.defaults.font.family = css('--f-body');
   ({resumen:rResumen, tiempos:rTiempos, puntos:rPuntos, urgencias:rUrg, noentrega:rNo, rutas:rRutas, alertas:rAlertas, procesos:rProcesos, rs:rRS, informe:rInforme})[view]();
@@ -1724,24 +1812,24 @@ function cmMostrar(){
   for (const r of R) {
     if (r.ruta === RUTA_ADMIN || r.ruta === RUTA_CHIA || esRutaEspecial(r.ruta)) continue;
     const s = SAL.get(sinTilde(r.conductor)); if (!s) continue;
-    const o = Ru.get(r.ruta) || {ru:r.ruta, costo:0, t:0, d:new Set(), mens:new Set()};
-    o.costo += s.v / DIAS_MES / visDia.get(r.conductor+'|'+r.dia); o.t += r.muestras; o.d.add(r.dia); o.mens.add(r.conductor);
+    const o = Ru.get(r.ruta) || {ru:r.ruta, costo:0, t:0, d:new Set(), mens:new Set(), cli:new Set()};
+    o.costo += s.v / DIAS_MES / visDia.get(r.conductor+'|'+r.dia); o.t += r.muestras; o.d.add(r.dia); o.mens.add(r.conductor); o.cli.add(r.cliente);
     Ru.set(r.ruta, o);
   }
-  const RuL = [...Ru.values()].map(o => ({...o, d:o.d.size, nm:o.mens.size, tit:TITULARES.get(o.ru) || '–', cpt: o.t ? o.costo/o.t : null})).filter(o => o.cpt != null).sort((a,b)=>a.cpt-b.cpt);
+  const RuL = [...Ru.values()].map(o => ({...o, d:o.d.size, nm:o.mens.size, nc:o.cli.size, tit:TITULARES.get(o.ru) || '–', cpt: o.t ? o.costo/o.t : null})).filter(o => o.cpt != null).sort((a,b)=>a.cpt-b.cpt);
   const ruC = RuL.reduce((s,o)=>s+o.costo,0), ruT = RuL.reduce((s,o)=>s+o.t,0), cptProm = ruT ? ruC/ruT : 0;
   $('cmRuSub').textContent = `Promedio ${fmtCOP(cptProm)} por tubo · ${RuL.length} rutas fijas, sin Chía (su titular no tiene valor) ni Mensajero administrativo · verde = más barata que el promedio, naranja = más cara`;
   $('cmRuWrap').style.height = Math.max(220, RuL.length*30 + 60) + 'px';
-  mk('chCmRu', {type:'bar', data:{labels:RuL.map(o=>titleCase(o.ru)), datasets:[
+  mk('chCmRu', {type:'bar', data:{labels:RuL.map(o=>`${titleCase(o.ru)} · ${fmtN(o.t)} muestras · ${fmtN(o.nc)} clientes`), datasets:[
       {label:'Costo por tubo', data:RuL.map(o=>Math.round(o.cpt)), backgroundColor:RuL.map(o=>o.cpt<=cptProm?css('--good'):css('--accent-2')), borderRadius:3, datalabels:{formatter:v=>fmtCOP(v)}},
       {type:'line', label:`Promedio ${fmtCOP(cptProm)}`, data:RuL.map(()=>Math.round(cptProm)), borderColor:css('--ink'), borderDash:[6,4], borderWidth:1.5, pointRadius:0}]},
-    options:{indexAxis:'y', plugins:{legend:leyenda, tooltip:Object.assign(tt(),{callbacks:{label:c=>c.datasetIndex ? c.dataset.label : `${fmtCOP(c.raw)} por tubo`, afterLabel:c=>{ if (c.datasetIndex) return ''; const o = RuL[c.dataIndex]; return `${fmtCOP(o.costo)} · ${fmtN(o.t)} tubos · ${o.d} días · titular ${o.tit}`; }}})},
+    options:{indexAxis:'y', plugins:{legend:leyenda, tooltip:Object.assign(tt(),{callbacks:{label:c=>c.datasetIndex ? c.dataset.label : `${fmtCOP(c.raw)} por tubo`, afterLabel:c=>{ if (c.datasetIndex) return ''; const o = RuL[c.dataIndex]; return `${fmtCOP(o.costo)} · ${fmtN(o.t)} muestras · ${fmtN(o.nc)} clientes · ${o.d} días · titular ${o.tit}`; }}})},
       scales:ejes('pesos por tubo')}});
   table('tCmRu', [
     {k:'ru', l:'Ruta', h:r=>esc(titleCase(r.ru))}, {k:'tit', l:'Titular'}, {k:'nm', l:'Mensajeros', r:1}, {k:'d', l:'Días', r:1},
-    {k:'t', l:'Tubos', r:1, h:r=>`<b>${fmtN(r.t)}</b>`}, {k:'costo', l:'Costo de la ruta', r:1, h:r=>fmtCOP(r.costo)},
+    {k:'t', l:'Muestras (tubos)', r:1, h:r=>`<b>${fmtN(r.t)}</b>`}, {k:'nc', l:'Clientes', r:1}, {k:'costo', l:'Costo de la ruta', r:1, h:r=>fmtCOP(r.costo)},
     {k:'cpt', l:'Costo por tubo', r:1, h:r=>`<span class="${r.cpt<=cptProm?'okc':'late'}">${fmtCOP(r.cpt)}</span>`}
-  ], RuL, {def:{k:'cpt', dir:1}, foot:['Total', '', '', '', fmtN(ruT), fmtCOP(ruC), fmtCOP(cptProm)]});
+  ], RuL, {def:{k:'cpt', dir:1}, foot:['Total', '', '', '', fmtN(ruT), fmtN(new Set(RuL.flatMap(o=>[...o.cli])).size), fmtCOP(ruC), fmtCOP(cptProm)]});
   // Cuadro
   $('cmInfo').textContent = `Costo por día = valor mensual ÷ ${DIAS_MES} días (lunes a sábado) · costo del periodo = costo por día × días trabajados` + (sinV.length ? ` · sin valor registrado: ${sinV.map(x=>x.c).join(', ')}` : '');
   table('tCm', [
@@ -1751,6 +1839,89 @@ function cmMostrar(){
     {k:'cpm', l:'Costo por muestra', r:1, h:r=>r.cpm==null ? 'sin valor' : `<span class="${r.cpm<=cpmProm?'okc':'late'}">${fmtCOP(r.cpm)}</span>`},
     {k:'mh', l:'Muestras por hora', r:1, h:r=>r.mh==null ? '–' : `<span class="${r.mh>=mhProm?'okc':'late'}">${fmtD(r.mh)}</span>`}
   ], M, {def:{k:'cpm', dir:1}, foot:['Total', '', '', '', fmtN(hTot), fmtN(mTot), fmtCOP(cTot), fmtCOP(cpmProm), fmtD(mhProm)]});
+}
+/* ---------- Detalle por cliente: muestras y costo ----------
+   Costo de cada visita = valor mensual del mensajero ÷ 26 días ÷ visitas que hizo ese día (el mismo reparto de
+   "Costo por tubo por ruta" y de la pérdida de las visitas sin entrega). Costo del cliente = suma de sus visitas
+   en la ruta y las fechas elegidas. Costo por muestra = costo del cliente ÷ sus muestras. */
+function dcBase(){
+  const d0 = $('dcDesde').value, d1 = $('dcHasta').value, ru = $('dcRuta').value;
+  // Sin los mensajeros excluidos (Jesús Montealegre): el cliente no comparte esos datos
+  return ALL.filter(r => !excluidoPc(r.conductor) && (!d0 || r.dia >= d0) && (!d1 || r.dia <= d1) && (!ru || r.ruta === ru));
+}
+function dcAbrir(){
+  const dias = [...new Set(ALL.map(r=>r.dia))].sort();
+  if (!$('dcDesde').value) $('dcDesde').value = F.desde || dias[0] || '';
+  if (!$('dcHasta').value) $('dcHasta').value = F.hasta || dias[dias.length-1] || '';
+  $('dcDesde').min = $('dcHasta').min = dias[0] || ''; $('dcDesde').max = $('dcHasta').max = dias[dias.length-1] || '';
+  const ru = $('dcRuta').value || (F.ruta && !esRutaEspecial(F.ruta) ? F.ruta : '');
+  $('dcRuta').innerHTML = '<option value="">Todas las rutas</option>' + [...new Set(conRuta(ALL).map(r=>r.ruta))].sort((a,b)=>a.localeCompare(b,'es'))
+    .map(x=>`<option value="${esc(x)}"${x===ru?' selected':''}>${esc(titleCase(x))}</option>`).join('');
+  $('dc').showModal();
+  dcMostrar();
+}
+function dcFilas(){
+  const R = dcBase();
+  const visDia = new Map(); for (const r of ALL) { const k = r.conductor+'|'+r.dia; visDia.set(k, (visDia.get(k)||0) + 1); }
+  const costo = r => { if (excluidoPc(r.conductor)) return null; const s = SAL.get(sinTilde(r.conductor)); return s ? s.v / DIAS_MES / visDia.get(r.conductor+'|'+r.dia) : null; };
+  const rows = [...groupBy(R, r=>r.cliente)].map(([c, rs]) => {
+    let cos = 0, val = 0; for (const r of rs) { const x = costo(r); if (x != null) { cos += x; val++; } }
+    const mu = rs.reduce((s,r)=>s+(r.muestras||0),0), no = rs.filter(r=>r.noEntrega).length;
+    const rutas = [...new Set(conRuta(rs).map(r=>r.ruta))];
+    return {c, rutas: rutas.map(titleCase).join(', ') || 'Domingo / festivo', vis: rs.length, dias: new Set(rs.map(r=>r.dia)).size, mu, no,
+      costo: cos, sinValor: rs.length - val, cpm: mu ? cos/mu : null, cpv: val ? cos/val : null};
+  });
+  return {R, rows};
+}
+function dcMostrar(){
+  const {rows} = dcFilas();
+  const q = $('dcBuscar').value.trim().toLowerCase();
+  const L = (q ? rows.filter(x=>x.c.toLowerCase().includes(q)) : rows).sort((a,b)=>b.costo-a.costo);
+  const cTot = L.reduce((s,x)=>s+x.costo,0), mTot = L.reduce((s,x)=>s+x.mu,0), vTot = L.reduce((s,x)=>s+x.vis,0), sinV = L.reduce((s,x)=>s+x.sinValor,0);
+  const d0 = $('dcDesde').value, d1 = $('dcHasta').value, ru = $('dcRuta').value;
+  const rango = d0 && d1 ? (d0 === d1 ? `del ${fDia(d0)}` : `del ${fDia(d0)} al ${fDia(d1)}`) : '';
+  $('dcTitle').textContent = ru ? `Muestras y costo por cliente · ${titleCase(ru)}` : 'Muestras y costo por cliente';
+  const caro = L.filter(x=>x.cpm!=null && x.mu>=5).sort((a,b)=>b.cpm-a.cpm)[0];
+  kpis('dcK', [
+    ['Clientes', fmtN(L.length), `${rango}${ru ? ' · ruta ' + titleCase(ru) : ' · todas las rutas'}`],
+    ['Muestras', fmtN(mTot), `${fmtN(vTot)} visitas`],
+    ['Costo de las visitas', fmtCOP(cTot), sinV ? `${fmtN(sinV)} visitas de mensajeros sin valor no se suman` : 'todas las visitas valoradas'],
+    ['Costo promedio por muestra', fmtCOP(mTot ? cTot/mTot : null), `costo promedio por visita ${fmtCOP(vTot - sinV ? cTot/(vTot - sinV) : null)}`],
+    ['Cliente con mayor costo', L.length ? L[0].c : '–', L.length ? `${fmtCOP(L[0].costo)} · ${fmtN(L[0].mu)} muestras` : '', 'amber'],
+    ['Mayor costo por muestra', caro ? caro.c : '–', caro ? `${fmtCOP(caro.cpm)} por muestra · ${fmtN(caro.mu)} muestras (mín. 5)` : '', 'bad']
+  ]);
+  // Gráfico: los 20 clientes de mayor costo (barras) con sus muestras (puntos)
+  const T = L.slice(0, 20);
+  $('dcSub').textContent = `${T.length < L.length ? `Los ${T.length} clientes de mayor costo, de ${fmtN(L.length)}` : `${fmtN(L.length)} clientes`} · barras = costo de las visitas · puntos = muestras entregadas · ${rango}`;
+  $('dcWrap').style.height = Math.max(240, T.length*30 + 80) + 'px';
+  mk('chDc', {type:'bar', data:{labels:T.map(x=>x.c), datasets:[
+      {label:'Costo de las visitas', data:T.map(x=>Math.round(x.costo)), backgroundColor:css('--c6'), borderRadius:3, xAxisID:'x', order:2, datalabels:{formatter:v=>fmtCOP(v)}},
+      {type:'line', label:'Muestras', data:T.map(x=>x.mu), xAxisID:'x2', borderColor:css('--accent-2'), backgroundColor:css('--accent-2'), showLine:false, pointRadius:5, order:1, datalabels:{align:'top', offset:2, formatter:v=>fmtN(v)}}]},
+    options:{indexAxis:'y', plugins:{legend:{position:'bottom', labels:{color:css('--muted'), boxWidth:12}},
+      tooltip:Object.assign(tt(),{mode:'index', intersect:false, callbacks:{label:c=>c.datasetIndex ? ` Muestras: ${fmtN(c.raw)}` : ` Costo: ${fmtCOP(c.raw)}`,
+        afterBody:items=>{ const x = T[items[0].dataIndex]; return `${fmtN(x.vis)} visitas · ${x.cpm==null ? 'sin muestras' : fmtCOP(x.cpm)+' por muestra'} · ruta ${x.rutas}`; }}})},
+      scales:{x:{position:'bottom', beginAtZero:true, ticks:{color:css('--muted'), callback:v=>fmtCOP(v)}, grid:{color:css('--line')}, title:{display:true, text:'costo de las visitas', color:css('--muted')}},
+        x2:{position:'top', beginAtZero:true, suggestedMax:Math.max(0, ...T.map(x=>x.mu)) * 1.3, ticks:{color:css('--accent-2')}, grid:{display:false}, title:{display:true, text:'muestras', color:css('--accent-2')}},
+        y:{ticks:{color:css('--muted'), autoSkip:false}, grid:{display:false}}}}});
+  $('dcInfo').textContent = `Costo de cada visita = valor mensual del mensajero ÷ ${DIAS_MES} días ÷ visitas que hizo ese día · costo por muestra = costo del cliente ÷ sus muestras` +
+    (sinV ? ` · ${fmtN(sinV)} visitas de mensajeros sin valor registrado no se suman al costo` : '');
+  const cpmProm = mTot ? cTot/mTot : 0;
+  table('tDc', [
+    {k:'c', l:'Cliente'}, {k:'rutas', l:'Ruta', wrap:1}, {k:'vis', l:'Visitas', r:1}, {k:'dias', l:'Días', r:1},
+    {k:'mu', l:'Muestras', r:1, h:r=>`<b>${fmtN(r.mu)}</b>`}, {k:'no', l:'Sin entrega', r:1},
+    {k:'costo', l:'Costo', r:1, h:r=>`<b>${fmtCOP(r.costo)}</b>`},
+    {k:'cpm', l:'Costo por muestra', r:1, h:r=>r.cpm==null ? '<span class="sd">sin muestras</span>' : `<span class="${r.cpm<=cpmProm?'okc':'late'}">${fmtCOP(r.cpm)}</span>`},
+    {k:'cpv', l:'Costo por visita', r:1, h:r=>fmtCOP(r.cpv)}
+  ], L, {def:{k:'costo', dir:-1}, empty:'No hay clientes con esta ruta y fechas',
+    foot:['Total', '', fmtN(vTot), '', fmtN(mTot), fmtN(L.reduce((s,x)=>s+x.no,0)), fmtCOP(cTot), fmtCOP(mTot ? cTot/mTot : null), fmtCOP(vTot - sinV ? cTot/(vTot - sinV) : null)]});
+}
+function dcCsv(){
+  const {rows} = dcFilas(), d0 = $('dcDesde').value, d1 = $('dcHasta').value, ru = $('dcRuta').value;
+  const data = rows.sort((a,b)=>b.costo-a.costo).map(x => [x.c, x.rutas, x.vis, x.dias, x.mu, x.no, Math.round(x.costo), x.cpm==null?'':Math.round(x.cpm), x.cpv==null?'':Math.round(x.cpv)]);
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob(['﻿' + Papa.unparse([['Cliente','Ruta','Visitas','Dias','Muestras','Sin entrega','Costo','Costo por muestra','Costo por visita'], ...data], {delimiter:';'})], {type:'text/csv;charset=utf-8'}));
+  a.download = `detalle_por_cliente_${ru ? ru.replace(/[^\w]+/g,'_').toLowerCase()+'_' : ''}${d0}_a_${d1}.csv`; a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href), 2000);
 }
 /* ---------- Pagos del cliente ----------
    Pagos fijos tomados de la factura de cada mes (entregada por la coordinación). Los adicionales salen de la base (Observaciones = adicional). */
@@ -2108,8 +2279,8 @@ function guias(){
       '<b>Top 10 · puntos con menos muestras</b>: los 10 puntos que menos muestras entregaron (con al menos 1 muestra) y su calificación.',
       '<b>Top 5 · laboratorios que más muestras entregan</b>: los 5 laboratorios que más muestras entregaron en el periodo.',
       '<b>Resultado de la visita por cliente</b>: por cada cliente, cuántas visitas (o muestras) fueron recolección, entrega, “No hay”, etc.',
-      '<b>Muestras recolectadas por día · punto de colección</b>: cuántas muestras entregó el punto elegido en cada día.',
-      '<b>Un gráfico por punto de colección</b>: las muestras de cada día de cada punto, uno por uno, de mayor a menor total.',
+      ['<b>Muestras recolectadas por día · punto de colección</b>: cuántas muestras entregó el punto elegido en cada día.', 'd1'],
+      ['<b>Un gráfico por punto de colección</b>: las muestras de cada día de cada punto, uno por uno, de mayor a menor total.', 'd1'],
       ['<b>Cuadro de resultado y muestras por cliente</b>: visitas y muestras de cada cliente por tipo de resultado.', 't']
     ],
     puntos: [
@@ -2129,7 +2300,7 @@ function guias(){
     noentrega: [
       '<b>Indicadores</b>: visitas sin entrega (resultado “No hay”), puntos afectados, puntos críticos, promedio por día, pérdida estimada y cliente con mayor pérdida.',
       '<b>Puntos con más visitas sin entrega</b>: los 15 puntos donde más veces no hubo muestras para entregar.',
-      '<b>Pérdida estimada por cliente</b>: lo que le costó al laboratorio ir a un punto y no recibir muestras. Cada visita vale el costo del día del mensajero (valor mensual ÷ 26) dividido entre las visitas que hizo ese día; se suma por cliente. Se mide en el rango de fechas del filtro y no incluye visitas de mensajeros sin valor registrado.',
+      ['<b>Pérdida estimada por cliente</b>: lo que le costó al laboratorio ir a un punto y no recibir muestras. Cada visita vale el costo del día del mensajero (valor mensual ÷ 26) dividido entre las visitas que hizo ese día; se suma por cliente. Se mide en el rango de fechas del filtro y no incluye visitas de mensajeros sin valor registrado.', 'd1'],
       '<b>Por día de la semana</b>: qué día de la semana tiene más visitas sin entrega.',
       '<b>Tendencia diaria</b>: el % de visitas sin entrega de cada día y su promedio de los últimos 7 días.',
       ['<b>Ranking · clientes que no realizan entregas</b>: los puntos ordenados por cantidad o % de visitas sin entrega.', 't']
@@ -2163,8 +2334,8 @@ function guias(){
     mr: [
       '<b>Indicadores</b>: muestras recogidas, promedio por día, y el día, la ruta y el mensajero con más muestras.',
       '<b>Muestras recogidas por día</b>: cuántas muestras se recogieron cada día y cuántas aportó cada ruta.',
-      '<b>Muestras por ruta</b>: cuántas muestras recogió cada una de las 11 rutas.',
-      '<b>Muestras por mensajero</b>: cuántas muestras recogió cada mensajero (titular de ruta o apoyo).',
+      ['<b>Muestras por ruta</b>: cuántas muestras recogió cada una de las 11 rutas.', 'd1'],
+      ['<b>Muestras por mensajero</b>: cuántas muestras recogió cada mensajero (titular de ruta o apoyo).', 'd1'],
       '<b>Per cápita por mensajero</b>: cuántas muestras recogió cada mensajero desde el 1 de octubre (sin Jesús Montealegre), frente al per cápita (muestras ÷ mensajeros).',
       '<b>Per cápita por ruta (tubos)</b>: cuántos tubos recogió cada ruta fija desde el 1 de octubre, frente al per cápita por ruta; con o sin Chía.',
       '<b>Cuadro per cápita</b>: muestras, días trabajados, muestras por día y por visita, % del total y diferencia frente al per cápita de cada mensajero.',
@@ -2191,6 +2362,11 @@ function guias(){
       '<b>Costo por tubo por ruta</b>: cuánto cuesta cada tubo recogido en cada ruta fija, según los mensajeros que la trabajaron.',
       '<b>Cuadro de costo</b>: jornada, días y horas trabajadas, muestras, costo del periodo, costo por muestra y muestras por hora de cada mensajero.'
     ],
+    dc: [
+      '<b>Indicadores</b>: clientes, muestras, costo de las visitas, costo promedio por muestra, el cliente con mayor costo y el de mayor costo por muestra.',
+      '<b>Costo y muestras por cliente</b>: lo que costaron las visitas a cada cliente (barras) y las muestras que entregó (puntos), en la ruta y las fechas elegidas.',
+      '<b>Cuadro por cliente</b>: visitas, días, muestras, visitas sin entrega, costo, costo por muestra y costo por visita de cada cliente.'
+    ],
     cap: [
       '<b>% de capacidad de cada ruta</b>: qué tan ocupada está cada una de las 11 rutas.',
       '<b>Indicadores de la ruta</b>: capacidad instalada (servicios por día), ocupación promedio, capacidad disponible, días al 100 %, jornada, servicios por hora, mensajeros y muestras.',
@@ -2202,7 +2378,7 @@ function guias(){
 }
 function renderGuias(){
   const G = guias();
-  const lista = items => items.filter(it => !(Array.isArray(it) && it[1] === 't' && SOLO_GRAFICAS)).map(it => `<li>${Array.isArray(it) ? it[0] : it}</li>`).join('');
+  const lista = items => items.filter(it => !(Array.isArray(it) && (it[1] === 't' || it[1] === 'd1') && SOLO_GRAFICAS)).map(it => `<li>${Array.isArray(it) ? it[0] : it}</li>`).join('');
   // La guía va al final de cada sección, después de las gráficas
   const poner = (cont, key) => {
     if (!cont) return;
@@ -2215,6 +2391,7 @@ function renderGuias(){
   poner($('cap').querySelector('.mpp-in'), 'cap');
   poner($('mr').querySelector('.mpp-in'), 'mr');
   poner($('cm').querySelector('.mpp-in'), 'cm');
+  poner($('dc').querySelector('.mpp-in'), 'dc');
   poner($('pg').querySelector('.mpp-in'), 'pg');
 }
 
@@ -2427,7 +2604,8 @@ function rInforme(){
     ['Puntos que más muestras entregan', 'Los 10 puntos de atención que más muestras entregaron en el periodo.'],
     ['¿Qué pasó en las visitas?', 'Qué porcentaje de las visitas fue recolección, entrega, “No hay”, urgencia, documentación, etc.']
   ];
-  $('infGloss').innerHTML = G.map(([t,d])=>`<dt>${t}</dt><dd>${d}</dd>`).join('');
+  // En el Dash 2 no van el Top de puntos ni el resultado de las visitas (ya están en Muestras por punto y en Resumen)
+  $('infGloss').innerHTML = G.filter(([t]) => !(SOLO_GRAFICAS && /^(Puntos que más muestras|¿Qué pasó en las visitas)/.test(t))).map(([t,d])=>`<dt>${t}</dt><dd>${d}</dd>`).join('');
 }
 
 /* ---------- Modo "solo gráficas" (versión de prueba): oculta tablas, listados y textos; deja indicadores y gráficas ---------- */
@@ -3243,6 +3421,7 @@ $('cdCsv').addEventListener('click', cumpDiaCsv);
   // Versión pública: sin costos ni pago fijo; "Pagos del cliente" queda solo con las recolecciones adicionales (Hoja 2)
   if (VERSION_PUBLICA) {
     $('cmOpen').hidden = true;
+    $('dcOpen').hidden = true;
     $('pgOpen').textContent = 'Servicios adicionales';
     $('pg').querySelector('.inf-eyebrow').textContent = 'Servicios adicionales';
     $('pgTitle').textContent = 'Recolecciones adicionales';
@@ -3267,6 +3446,13 @@ $('cmOpen').addEventListener('click', () => { if (!ALL.length) return; cmAbrir()
 $('cmClose').addEventListener('click', () => $('cm').close());
 $('cm').addEventListener('click', e => { if (e.target === $('cm')) $('cm').close(); });
 for (const id of ['cmDesde','cmHasta']) $(id).addEventListener('change', cmMostrar);
+// Detalle por cliente
+$('dcOpen').addEventListener('click', () => { if (!ALL.length) return; dcAbrir(); });
+$('dcClose').addEventListener('click', () => $('dc').close());
+$('dc').addEventListener('click', e => { if (e.target === $('dc')) $('dc').close(); });
+for (const id of ['dcRuta','dcDesde','dcHasta']) $(id).addEventListener('change', dcMostrar);
+let qDc; $('dcBuscar').addEventListener('input', () => { clearTimeout(qDc); qDc = setTimeout(dcMostrar, 200); });
+$('dcCsv').addEventListener('click', dcCsv);
 // Capacidad por ruta
 $('capOpen').addEventListener('click', () => { if (!ALL.length) return; capAbrir(); });
 $('capClose').addEventListener('click', () => $('cap').close());
@@ -3349,6 +3535,50 @@ async function descargarPdf(){
     btns.forEach((b, i) => { b.disabled = false; b.textContent = txt[i]; });
   }
 }
+/* ---------- Índice: presentación de inicio (versión corta) ----------
+   Qué trae el tablero y dónde está. En el Dash 2 no aparecen las pestañas que ese dash no tiene. */
+const INDICE = [
+  {g:'Pestañas', items:[
+    {v:'informe', t:'Informe', d:'Resumen para el cliente'},
+    {v:'resumen', t:'Resumen operativo', d:'Servicios del día a día'},
+    {v:'tiempos', t:'Tiempos de llegada', d:'¿Llegamos a tiempo?'},
+    {v:'rs', t:'Muestras por punto', d:'Quién entrega más y menos'},
+    {v:'puntos', t:'Puntos de atención', d:'Detalle de cada punto', solo1:1},
+    {v:'urgencias', t:'Urgencias', d:'Cuántas, quién y a qué hora'},
+    {v:'noentrega', t:'Visitas sin entrega', d:'Visitas “No hay” y pérdida en $'},
+    {v:'rutas', t:'Rutas', d:'Novedades y servicios por ruta'},
+    {v:'alertas', t:'Alertas y tendencias', d:'Lo que requiere atención', solo1:1},
+    {v:'procesos', t:'Procesos', d:'Visitas a PROCESOS, aparte'}
+  ]},
+  {g:'Botones de arriba', items:[
+    {b:'mppOpen', t:'Muestras por punto', d:'Muestras por día de un lugar'},
+    {b:'capOpen', t:'Capacidad por ruta', d:'Qué tan llena está cada ruta'},
+    {b:'mrOpen', t:'Muestras recogidas', d:'Por día, mensajero y ruta'},
+    {b:'cmOpen', t:'Costo por mensajero', d:'Costo por muestra y por tubo', priv:1},
+    {b:'pgOpen', t:'Pagos del cliente', d:'Factura y adicionales'},
+    {b:'dcOpen', t:'Detalle por cliente', d:'Muestras y costo por cliente', priv:1}
+  ]}
+];
+function rIndice(){
+  let n = 0;
+  const dh = $('datosHasta');
+  $('idxDatos').innerHTML = dh && !dh.hidden ? dh.innerHTML : '';
+  $('idxBody').innerHTML = INDICE.map(G => {
+    const items = G.items.filter(x => !(x.solo1 && SOLO_GRAFICAS) && !(x.priv && VERSION_PUBLICA));
+    return `<section class="idx-grp"><h3>${G.g}</h3><div class="idx-list">` + items.map(x => {
+      const nombre = x.b ? ($(x.b) ? $(x.b).textContent.trim() : x.t) : x.t;
+      const attr = x.v ? `data-iv="${x.v}"` : `data-ib="${x.b}"`;
+      return `<button type="button" class="idx-item ${x.b ? 'btnx' : ''}" ${attr}><span class="idx-n">${++n}</span><span><b>${esc(nombre)}</b><small>${x.d}</small></span><span class="idx-go">${x.v ? 'Ir' : 'Abrir'} →</span></button>`;
+    }).join('') + '</div></section>';
+  }).join('') +
+  `<p class="idx-tips"><b>Tips:</b> filtre por fechas y ruta en «Filtros y ajustes» · descargue la pestaña en PDF con el botón de la derecha · al final de cada sección está «¿Qué muestra cada gráfica?».</p>`;
+}
+$('idxBody').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  if (b.dataset.iv) go(b.dataset.iv);
+  else if (b.dataset.ib) $(b.dataset.ib).click();
+  else if (b.dataset.if) { $('fbox').open = true; $('fbox').scrollIntoView({behavior:'smooth', block:'start'}); }
+});
 $('tabPrint').addEventListener('click', descargarPdf);
 // Impresión con Ctrl+P: el encabezado también sale
 window.addEventListener('beforeprint', llenarEncabezado);
@@ -3367,7 +3597,7 @@ try{
   const s = localStorage.getItem('lih_every'); if(s!==null && [...$('every').options].some(o=>o.value===s)) $('every').value = s;
   // 'lih_meta_v3': las metas guardadas con versiones anteriores (30 o 35 min) no reemplazan la meta vigente de 36 min
   const m = JSON.parse(localStorage.getItem('lih_meta_v3') || 'null'); if (m){ Object.assign(META, m); }
-  const v = localStorage.getItem('lih_view'); if (v && $('v-'+v)) view = v;
+  // Siempre abre en el Índice (presentación de inicio); con #pestaña en la dirección se abre directo esa pestaña
 }catch(e){}
 const h = location.hash.slice(1); if (h && $('v-'+h)) view = h;
 $('mNormal').value = META.normal; $('mUrg').value = META.urg; $('mObj').value = META.obj;
